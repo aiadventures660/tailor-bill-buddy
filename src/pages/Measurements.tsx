@@ -341,7 +341,7 @@ const Measurements = () => {
                       <span className="text-muted-foreground capitalize">
                         {key.replace('_', ' ')}:
                       </span>
-                      <span className="font-medium">{value}"</span>
+                      <span className="font-medium">{String(value)}</span>
                     </div>
                   ))}
                 </div>

@@ -36,9 +36,6 @@ interface Order {
     name: string;
     mobile: string;
   };
-  profiles?: {
-    full_name: string;
-  } | null;
 }
 
 const statusConfig = {
@@ -86,8 +83,7 @@ const Orders = () => {
         .from('orders')
         .select(`
           *,
-          customers (id, name, mobile),
-          profiles:assigned_tailor (full_name)
+          customers (id, name, mobile)
         `)
         .order('created_at', { ascending: false });
 
@@ -98,7 +94,10 @@ const Orders = () => {
 
       const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching orders:', error);
+        throw error;
+      }
 
       setOrders(data || []);
     } catch (error: any) {
