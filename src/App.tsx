@@ -10,6 +10,10 @@ import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
 import Measurements from "./pages/Measurements";
 import Orders from "./pages/Orders";
+import Billing from "./pages/Billing";
+import Inventory from "./pages/Inventory";
+import Payments from "./pages/Payments";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -68,26 +72,22 @@ const AppRoutes = () => {
       } />
       <Route path="/billing" element={
         <ProtectedRoute>
-          <div className="text-center py-8">
-            <h2 className="text-2xl font-bold">Billing Module</h2>
-            <p className="text-muted-foreground">Coming soon...</p>
-          </div>
+          <Billing />
         </ProtectedRoute>
       } />
       <Route path="/inventory" element={
         <ProtectedRoute>
-          <div className="text-center py-8">
-            <h2 className="text-2xl font-bold">Inventory Management</h2>
-            <p className="text-muted-foreground">Coming soon...</p>
-          </div>
+          <Inventory />
+        </ProtectedRoute>
+      } />
+      <Route path="/payments" element={
+        <ProtectedRoute>
+          <Payments />
         </ProtectedRoute>
       } />
       <Route path="/reports" element={
         <ProtectedRoute>
-          <div className="text-center py-8">
-            <h2 className="text-2xl font-bold">Reports & Analytics</h2>
-            <p className="text-muted-foreground">Coming soon...</p>
-          </div>
+          <Reports />
         </ProtectedRoute>
       } />
       <Route path="/settings" element={

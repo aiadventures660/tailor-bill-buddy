@@ -21,8 +21,19 @@ import {
   SidebarInset,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import {
-  Users,
+import { 
+  Users, 
+  Ruler, 
+  ShoppingCart, 
+  Home,
+  LogOut,
+  Menu,
+  User,
+  Receipt,
+  Package,
+  CreditCard,
+  BarChart3
+} from 'lucide-react';
   Ruler,
   ShoppingCart,
   FileText,
