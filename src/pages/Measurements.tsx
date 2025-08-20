@@ -19,8 +19,8 @@ interface Customer {
 interface Measurement {
   id: string;
   customer_id: string;
-  clothing_type: string;
-  measurements: any;
+  clothing_type: keyof typeof clothingTypeFields;
+  measurements: Record<string, number>;
   notes?: string;
   customers: Customer;
   created_at: string;
@@ -38,18 +38,40 @@ const clothingTypeFields = {
   pant: [
     { name: 'waist', label: 'Waist', unit: 'inches' },
     { name: 'hip', label: 'Hip', unit: 'inches' },
-    { name: 'length', label: 'Length', unit: 'inches' },
+    { name: 'length', label: 'Pant Length', unit: 'inches' },
     { name: 'bottom', label: 'Bottom', unit: 'inches' },
     { name: 'thigh', label: 'Thigh', unit: 'inches' },
     { name: 'knee', label: 'Knee', unit: 'inches' },
   ],
-  kurta_pajama: [
+  kurta: [
     { name: 'chest', label: 'Chest', unit: 'inches' },
     { name: 'length', label: 'Kurta Length', unit: 'inches' },
     { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
     { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
+    { name: 'collar', label: 'Collar', unit: 'inches' },
+  ],
+  pajama: [
     { name: 'waist', label: 'Waist', unit: 'inches' },
-    { name: 'pajama_length', label: 'Pajama Length', unit: 'inches' },
+    { name: 'length', label: 'Pajama Length', unit: 'inches' },
+    { name: 'bottom', label: 'Bottom', unit: 'inches' },
+  ],
+  coat: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'hip', label: 'Hip', unit: 'inches' },
+    { name: 'length', label: 'Coat Length', unit: 'inches' },
+    { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
+    { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
+  ],
+  bandi: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'length', label: 'Bandi Length', unit: 'inches' },
+    { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
+  ],
+  westcot: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'length', label: 'Length', unit: 'inches' },
   ],
 };
 
@@ -63,37 +85,38 @@ const Measurements = () => {
   const [selectedClothingType, setSelectedClothingType] = useState<keyof typeof clothingTypeFields>('shirt');
   const [measurementData, setMeasurementData] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      const [measurementsResponse, customersResponse] = await Promise.all([
-        supabase
-          .from('measurements')
-          .select(`
-            *,
-            customers (id, name, mobile)
-          `)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('customers')
-          .select('id, name, mobile')
-          .order('name')
-      ]);
+      const { data: measurementsData, error: measurementsError } = await supabase
+        .from('measurements')
+        .select(`
+          *,
+          customers (id, name, mobile)
+        `)
+        .order('created_at', { ascending: false });
 
-      if (measurementsResponse.error) throw measurementsResponse.error;
-      if (customersResponse.error) throw customersResponse.error;
+      const { data: customersData, error: customersError } = await supabase
+        .from('customers')
+        .select('id, name, mobile')
+        .order('name');
 
-      setMeasurements(measurementsResponse.data || []);
-      setCustomers(customersResponse.data || []);
+      if (measurementsError) throw measurementsError;
+      if (customersError) throw customersError;
+
+      setMeasurements(measurementsData || []);
+      setCustomers(customersData || []);
     } catch (error: any) {
       console.error('Error fetching data:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to fetch data',
+        title: 'Error fetching data',
+        description: error.message,
         variant: 'destructive',
       });
     } finally {
@@ -106,13 +129,29 @@ const Measurements = () => {
     
     if (!selectedCustomer || !selectedClothingType) {
       toast({
-        title: 'Error',
-        description: 'Please select customer and clothing type',
+        title: 'Validation Error',
+        description: 'Please select both customer and clothing type',
         variant: 'destructive',
       });
       return;
     }
 
+    // Validate that all required measurements are filled
+    const requiredFields = clothingTypeFields[selectedClothingType];
+    const missingFields = requiredFields.filter(
+      field => !measurementData[field.name]
+    );
+
+    if (missingFields.length > 0) {
+      toast({
+        title: 'Missing Measurements',
+        description: `Please fill in all measurement fields`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       const { error } = await supabase
         .from('measurements')
@@ -121,8 +160,6 @@ const Measurements = () => {
           clothing_type: selectedClothingType,
           measurements: measurementData,
           notes: notes || null,
-        }, {
-          onConflict: 'customer_id,clothing_type'
         });
 
       if (error) throw error;
@@ -132,15 +169,17 @@ const Measurements = () => {
         description: 'Measurements saved successfully',
       });
 
+      await fetchData(); // Refresh the data
       handleCloseDialog();
-      fetchData();
     } catch (error: any) {
       console.error('Error saving measurements:', error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to save measurements',
+        title: 'Error saving measurements',
+        description: error.message,
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -182,7 +221,16 @@ const Measurements = () => {
           </p>
         </div>
         
-        <Dialog open={isAddDialogOpen} onOpenChange={handleCloseDialog}>
+        <Dialog 
+          open={isAddDialogOpen} 
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCloseDialog();
+            } else {
+              setIsAddDialogOpen(true);
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -228,9 +276,11 @@ const Measurements = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="shirt">Shirt</SelectItem>
-                      <SelectItem value="pant">Pant</SelectItem>
-                      <SelectItem value="kurta_pajama">Kurta Pajama</SelectItem>
+                      {Object.keys(clothingTypeFields).map((type) => (
+                        <SelectItem key={type} value={type} className="capitalize">
+                          {type.replace('_', ' ')}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -273,8 +323,8 @@ const Measurements = () => {
               </div>
               
               <div className="flex space-x-2">
-                <Button type="submit" className="flex-1">
-                  Save Measurements
+                <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                  {isSubmitting ? 'Saving...' : 'Save Measurements'}
                 </Button>
                 <Button type="button" variant="outline" onClick={handleCloseDialog}>
                   Cancel

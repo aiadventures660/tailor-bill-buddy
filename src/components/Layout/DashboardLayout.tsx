@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -32,18 +32,11 @@ import {
   Receipt,
   Package,
   CreditCard,
-  BarChart3
-} from 'lucide-react';
-  Ruler,
-  ShoppingCart,
-  FileText,
-  Package,
   BarChart3,
   Settings,
   Scissors,
   ShoppingBag,
-  LogOut,
-  User,
+  FileText
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 

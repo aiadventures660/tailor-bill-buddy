@@ -157,7 +157,16 @@ const Customers = () => {
           </p>
         </div>
         
-        <Dialog open={isAddDialogOpen} onOpenChange={handleCloseDialog}>
+        <Dialog 
+          open={isAddDialogOpen} 
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCloseDialog();
+            } else {
+              setIsAddDialogOpen(true);
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
