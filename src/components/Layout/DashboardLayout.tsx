@@ -33,10 +33,10 @@ import {
   Package,
   CreditCard,
   BarChart3,
+  FileText,
   Settings,
   Scissors,
-  ShoppingBag,
-  FileText
+  ShoppingBag
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
