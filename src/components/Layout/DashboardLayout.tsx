@@ -32,18 +32,11 @@ import {
   Receipt,
   Package,
   CreditCard,
-  BarChart3
-} from 'lucide-react';
-  Ruler,
-  ShoppingCart,
-  FileText,
-  Package,
   BarChart3,
+  FileText,
   Settings,
   Scissors,
-  ShoppingBag,
-  LogOut,
-  User,
+  ShoppingBag
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
