@@ -38,7 +38,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  RefreshCw,
+  Activity
 } from 'lucide-react';
 
 interface Order {
@@ -115,9 +117,22 @@ const Orders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Real-time statistics
+  const [orderStats, setOrderStats] = useState({
+    total: 0,
+    pending: 0,
+    inProgress: 0,
+    ready: 0,
+    delivered: 0,
+    cancelled: 0,
+    totalRevenue: 0,
+    pendingRevenue: 0
+  });
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -142,9 +157,48 @@ const Orders = () => {
   });
 
   useEffect(() => {
-    fetchOrders();
-    fetchCustomers();
+    fetchInitialData();
+    
+    // Set up real-time subscriptions
+    const ordersSubscription = supabase
+      .channel('orders_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    const customersSubscription = supabase
+      .channel('customers_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () => {
+        fetchCustomers();
+      })
+      .subscribe();
+
+    const orderItemsSubscription = supabase
+      .channel('order_items_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ordersSubscription);
+      supabase.removeChannel(customersSubscription);
+      supabase.removeChannel(orderItemsSubscription);
+    };
   }, []);
+
+  const fetchInitialData = async () => {
+    setLoading(true);
+    await Promise.all([fetchOrders(), fetchCustomers()]);
+    setLoading(false);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchInitialData();
+    setRefreshing(false);
+  };
 
   const fetchCustomers = async () => {
     try {
@@ -178,7 +232,27 @@ const Orders = () => {
       const { data, error } = await query;
 
       if (error) throw error;
-      setOrders(data || []);
+      
+      const ordersData = data || [];
+      setOrders(ordersData);
+      
+      // Calculate real-time statistics
+      const stats = {
+        total: ordersData.length,
+        pending: ordersData.filter(order => order.status === 'pending').length,
+        inProgress: ordersData.filter(order => order.status === 'in_progress').length,
+        ready: ordersData.filter(order => order.status === 'ready').length,
+        delivered: ordersData.filter(order => order.status === 'delivered').length,
+        cancelled: ordersData.filter(order => order.status === 'cancelled').length,
+        totalRevenue: ordersData
+          .filter(order => order.status === 'delivered')
+          .reduce((sum, order) => sum + (order.total_amount || 0), 0),
+        pendingRevenue: ordersData
+          .filter(order => ['pending', 'in_progress', 'ready'].includes(order.status))
+          .reduce((sum, order) => sum + (order.balance_amount || 0), 0)
+      };
+      
+      setOrderStats(stats);
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       toast({
@@ -186,8 +260,6 @@ const Orders = () => {
         description: 'Failed to fetch orders',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -394,29 +466,71 @@ const Orders = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-slate-900 mx-auto"></div>
+          <div>
+            <h3 className="text-lg font-medium text-slate-800">Loading Orders</h3>
+            <p className="text-slate-600">Fetching real-time data from database...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Refreshing Indicator */}
+      {refreshing && !loading && (
+        <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-lg p-3 border">
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="h-4 w-4 animate-spin text-slate-600" />
+            <span className="text-sm text-slate-600">Refreshing data...</span>
+          </div>
+        </div>
+      )}
+      
       <div className="p-3 sm:p-4 lg:p-6">
         {/* Header Section */}
         <div className="mb-6 lg:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div className="text-center sm:text-left">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2">Orders Management</h1>
-              <p className="text-slate-600 text-sm sm:text-base">Manage your orders with ease</p>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-2 flex items-center justify-center sm:justify-start space-x-3">
+                <div className="p-2 bg-slate-900 rounded-xl">
+                  <ShoppingBag className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                </div>
+                <span>Orders Management</span>
+              </h1>
+              <p className="text-slate-600 text-sm sm:text-base mb-2">Manage your orders with real-time updates</p>
+              <div className="flex items-center justify-center sm:justify-start space-x-4 text-xs text-slate-500">
+                <span className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>Live Data</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <Activity className="h-3 w-3" />
+                  <span>Real-time Updates</span>
+                </span>
+              </div>
             </div>
-            <Button
-              onClick={() => setIsCreateDialogOpen(true)}
-              className="bg-gradient-to-r from-slate-900 to-slate-700 hover:from-slate-800 hover:to-slate-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl w-full sm:w-auto"
-            >
-              <Plus className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-              <span className="sm:hidden">New Order</span>
-              <span className="hidden sm:inline">Create Order</span>
-            </Button>
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                disabled={refreshing}
+                className="border-slate-300 text-slate-700 hover:bg-slate-50 w-full sm:w-auto"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Button
+                onClick={() => setIsCreateDialogOpen(true)}
+                className="bg-gradient-to-r from-slate-900 to-slate-700 hover:from-slate-800 hover:to-slate-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl w-full sm:w-auto"
+              >
+                <Plus className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="sm:hidden">New Order</span>
+                <span className="hidden sm:inline">Create Order</span>
+              </Button>
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -426,12 +540,17 @@ const Orders = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-slate-600 text-xs sm:text-sm">Total Orders</p>
-                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">{orders.length}</p>
+                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
+                      {loading ? '...' : orderStats.total}
+                    </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-blue-100 rounded-full">
                     <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-blue-600" />
                   </div>
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  ₹{orderStats.totalRevenue.toLocaleString()} completed
+                </p>
               </CardContent>
             </Card>
 
@@ -440,14 +559,17 @@ const Orders = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-slate-600 text-xs sm:text-sm">Pending</p>
-                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">
-                      {orders.filter(order => order.status === 'pending').length}
+                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
+                      {loading ? '...' : orderStats.pending}
                     </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-yellow-100 rounded-full">
                     <Clock className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-yellow-600" />
                   </div>
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Awaiting processing
+                </p>
               </CardContent>
             </Card>
 
@@ -456,14 +578,17 @@ const Orders = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-slate-600 text-xs sm:text-sm">In Progress</p>
-                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">
-                      {orders.filter(order => order.status === 'in_progress').length}
+                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
+                      {loading ? '...' : orderStats.inProgress}
                     </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-orange-100 rounded-full">
                     <Truck className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-orange-600" />
                   </div>
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Currently being worked on
+                </p>
               </CardContent>
             </Card>
 
@@ -471,13 +596,72 @@ const Orders = () => {
               <CardContent className="p-3 sm:p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-slate-600 text-xs sm:text-sm">Completed</p>
-                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">
-                      {orders.filter(order => order.status === 'delivered').length}
+                    <p className="text-slate-600 text-xs sm:text-sm">Ready</p>
+                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
+                      {loading ? '...' : orderStats.ready}
                     </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-green-100 rounded-full">
                     <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-green-600" />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Ready for delivery
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Additional Stats Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100 hover:shadow-xl transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-700 text-sm font-medium">Total Revenue</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      ₹{orderStats.totalRevenue.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">From completed orders</p>
+                  </div>
+                  <div className="p-3 bg-blue-200 rounded-full">
+                    <DollarSign className="h-6 w-6 text-blue-700" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100 hover:shadow-xl transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-orange-700 text-sm font-medium">Pending Revenue</p>
+                    <p className="text-2xl font-bold text-orange-900">
+                      ₹{orderStats.pendingRevenue.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-orange-600 mt-1">Outstanding balances</p>
+                  </div>
+                  <div className="p-3 bg-orange-200 rounded-full">
+                    <TrendingUp className="h-6 w-6 text-orange-700" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100 hover:shadow-xl transition-all duration-300">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-700 text-sm font-medium">Completion Rate</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {orderStats.total > 0 ? Math.round((orderStats.delivered / orderStats.total) * 100) : 0}%
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      {orderStats.delivered} of {orderStats.total} orders
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-200 rounded-full">
+                    <CheckCircle className="h-6 w-6 text-green-700" />
                   </div>
                 </div>
               </CardContent>
@@ -538,14 +722,28 @@ const Orders = () => {
           <Card className="border-0 shadow-lg bg-white/50 backdrop-blur-sm">
             <CardContent className="p-6 sm:p-8 lg:p-12 text-center">
               <ShoppingBag className="h-12 w-12 sm:h-16 sm:w-16 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-lg sm:text-xl font-semibold text-slate-600 mb-2">No Orders Found</h3>
-              <p className="text-slate-500 mb-4 sm:mb-6 text-sm sm:text-base">Start by creating your first order</p>
+              <h3 className="text-lg sm:text-xl font-semibold text-slate-600 mb-2">
+                {orders.length === 0 ? 'No Orders Yet' : 'No Orders Found'}
+              </h3>
+              <p className="text-slate-500 mb-4 sm:mb-6 text-sm sm:text-base">
+                {orders.length === 0 
+                  ? "Start by creating your first order to begin managing your tailoring business" 
+                  : "Try adjusting your search terms or filters to find the orders you're looking for"
+                }
+              </p>
+              {orders.length === 0 && (
+                <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-blue-700 text-sm">
+                    💡 <strong>Tip:</strong> Orders will automatically sync with your dashboard statistics and update in real-time
+                  </p>
+                </div>
+              )}
               <Button
                 onClick={() => setIsCreateDialogOpen(true)}
                 className="bg-gradient-to-r from-slate-900 to-slate-700 hover:from-slate-800 hover:to-slate-600 text-white w-full sm:w-auto"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Create Order
+                {orders.length === 0 ? 'Create Your First Order' : 'Create Order'}
               </Button>
             </CardContent>
           </Card>
