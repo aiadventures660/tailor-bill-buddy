@@ -21,16 +21,19 @@ import {
   Scissors,
   Calculator,
   User,
+  Calendar,
   Phone,
   FileText,
+  Download,
   Printer,
+  Eye,
+  MessageSquare,
   Send,
   CreditCard,
   CheckCircle,
   DollarSign,
   TrendingUp,
-  Package,
-  MessageSquare
+  Package
 } from 'lucide-react';
 
 interface Customer {
@@ -49,7 +52,7 @@ interface InvoiceItem {
   unit_price: number;
   total_price: number;
   hsn_code?: string;
-  clothingType?: 'shirt' | 'pant' | 'suit' | 'kurta_pajama' | 'blouse' | 'saree_blouse';
+  clothingType?: 'shirt' | 'pant' | 'suit' | 'dress' | 'other';
   measurements?: {
     chest: string;
     shoulder: string;
@@ -82,7 +85,8 @@ const Billing = () => {
   const [customerSearch, setCustomerSearch] = useState('');
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [gstRate, setGstRate] = useState(18);
+  const [currentInvoice, setCurrentInvoice] = useState<Invoice | null>(null);
+  const [gstRate, setGstRate] = useState(18); // Default GST rate
   const [notes, setNotes] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
@@ -96,13 +100,14 @@ const Billing = () => {
     pendingBills: 0
   });
 
+  // New item form state
   const [newItem, setNewItem] = useState({
     type: 'ready_made' as 'ready_made' | 'stitching',
     description: '',
     quantity: 1,
     unit_price: 0,
     hsn_code: '',
-    clothingType: 'shirt' as 'shirt' | 'pant' | 'suit' | 'kurta_pajama' | 'blouse' | 'saree_blouse',
+    clothingType: 'shirt' as 'shirt' | 'pant' | 'suit' | 'dress' | 'other',
     measurements: {
       chest: '',
       shoulder: '',
@@ -115,6 +120,7 @@ const Billing = () => {
   useEffect(() => {
     fetchCustomers();
     fetchInvoices();
+    calculateStats();
   }, []);
 
   useEffect(() => {
@@ -169,6 +175,7 @@ const Billing = () => {
 
   const fetchInvoices = async () => {
     try {
+      // For now, use orders table as invoices until we create the invoices table
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -179,12 +186,13 @@ const Billing = () => {
       
       if (error) throw error;
       
+      // Transform orders to invoice format
       const transformedInvoices = (data || []).map(order => ({
         id: order.id,
         invoice_number: order.order_number,
         customer_id: order.customer_id,
         customer: order.customer,
-        items: [],
+        items: [], // Will be populated later
         subtotal: order.total_amount || 0,
         gst_rate: 18,
         gst_amount: (order.total_amount || 0) * 0.18,
@@ -211,6 +219,7 @@ const Billing = () => {
       return;
     }
 
+    // Additional validation for stitching items
     if (newItem.type === 'stitching') {
       const requiredMeasurements = ['chest', 'shoulder', 'length'];
       const missingMeasurements = requiredMeasurements.filter(
@@ -275,6 +284,7 @@ const Billing = () => {
     const subtotal = invoiceItems.reduce((sum, item) => sum + item.total_price, 0);
     const gstAmount = (subtotal * gstRate) / 100;
     const totalAmount = subtotal + gstAmount;
+
     return { subtotal, gstAmount, totalAmount };
   };
 
@@ -293,6 +303,7 @@ const Billing = () => {
       const { subtotal, gstAmount, totalAmount } = calculateTotals();
       const invoiceNumber = generateInvoiceNumber();
 
+      // For now, create an order instead of invoice
       const orderData = {
         order_number: invoiceNumber,
         customer_id: selectedCustomer.id,
@@ -314,6 +325,7 @@ const Billing = () => {
 
       if (orderError) throw orderError;
 
+      // Create order items
       const orderItems = invoiceItems.map(item => ({
         order_id: orderResult.id,
         item_type: item.type,
@@ -321,9 +333,9 @@ const Billing = () => {
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: item.total_price,
-        ready_made_item_id: null,
-        measurement_id: null,
-        clothing_type: item.type === 'stitching' ? (item.clothingType || 'shirt') : null
+        ready_made_item_id: item.type === 'ready_made' ? null : null, // Add proper logic here
+        measurement_id: item.type === 'stitching' ? null : null, // Add proper logic here
+        clothing_type: item.type === 'stitching' ? ('shirt' as const) : null // Default to shirt for stitching
       }));
 
       const { error: itemsError } = await supabase
@@ -334,21 +346,42 @@ const Billing = () => {
 
       toast({
         title: "Success",
-        description: `Bill ${invoiceNumber} created successfully`,
+        description: `Invoice ${invoiceNumber} created successfully`,
       });
 
+      // Send notification if enabled
       if (sendNotification && selectedCustomer) {
-        toast({
-          title: "Bill Created",
-          description: `Bill receipt ready for ${selectedCustomer.name}`,
-        });
+        try {
+          const invoiceForNotification = {
+            ...orderResult,
+            invoice_number: invoiceNumber,
+            items: invoiceItems,
+            total_amount: totalAmount,
+            customer: selectedCustomer
+          };
+
+          // For now, just show a success message - notification service can be implemented later
+          toast({
+            title: "Bill Created",
+            description: `Bill receipt ready for ${selectedCustomer.name}`,
+          });
+        } catch (notificationError) {
+          console.error('Failed to send notification:', notificationError);
+          toast({
+            title: "Bill Created",
+            description: "Invoice created successfully",
+          });
+        }
       }
 
+      // Reset form
       setSelectedCustomer(null);
       setInvoiceItems([]);
       setNotes('');
       setDueDate('');
       setCustomerSearch('');
+      
+      // Refresh invoices list
       fetchInvoices();
       setActiveTab('list');
 
@@ -365,6 +398,7 @@ const Billing = () => {
   };
 
   const generatePDF = (invoice: Invoice) => {
+    // Create a new window with invoice content for printing
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
@@ -375,10 +409,19 @@ const Billing = () => {
   };
 
   const sendInvoiceNotification = async (invoice: Invoice) => {
-    toast({
-      title: "Notification Sent",
-      description: `Bill receipt sent to ${invoice.customer.name}`,
-    });
+    try {
+      // For now, just show a success message - notification service can be implemented later
+      toast({
+        title: "Notification Sent",
+        description: `Bill receipt sent to ${invoice.customer.name}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Notification Failed",
+        description: "Failed to send bill receipt notification",
+        variant: "destructive"
+      });
+    }
   };
 
   const generateInvoiceHTML = (invoice: Invoice) => {
@@ -392,28 +435,26 @@ const Billing = () => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Bill ${invoice.invoice_number}</title>
+        <title>Invoice ${invoice.invoice_number}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }
-          .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-          .invoice-header h1 { color: #000; margin: 0; font-size: 28px; }
-          .invoice-header h2 { color: #666; margin: 5px 0; font-size: 18px; }
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+          .invoice-header { text-align: center; margin-bottom: 30px; }
           .invoice-details { display: flex; justify-content: space-between; margin-bottom: 30px; }
-          .customer-details, .invoice-info { width: 45%; }
-          .invoice-info { text-align: right; }
+          .customer-details { width: 45%; }
+          .invoice-info { width: 45%; text-align: right; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-          th { background-color: #f8f9fa; font-weight: bold; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f5f5f5; }
           .totals { width: 100%; margin-top: 20px; }
-          .totals td { border: none; padding: 8px 0; }
-          .total-row { font-weight: bold; font-size: 18px; border-top: 2px solid #000; }
-          .notes { margin-top: 30px; padding: 15px; background-color: #f8f9fa; }
+          .totals td { border: none; padding: 5px 0; }
+          .total-row { font-weight: bold; font-size: 18px; }
+          .notes { margin-top: 30px; }
           @media print { .no-print { display: none; } }
         </style>
       </head>
       <body>
         <div class="invoice-header">
-          <h1>PROFESSIONAL BILL</h1>
+          <h1>INVOICE</h1>
           <h2>Tailor Bill Buddy</h2>
         </div>
         
@@ -427,7 +468,7 @@ const Billing = () => {
           </div>
           
           <div class="invoice-info">
-            <p><strong>Bill Number:</strong> ${invoice.invoice_number}</p>
+            <p><strong>Invoice Number:</strong> ${invoice.invoice_number}</p>
             <p><strong>Date:</strong> ${new Date(invoice.created_at || '').toLocaleDateString()}</p>
             ${invoice.due_date ? `<p><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>` : ''}
           </div>
@@ -448,7 +489,7 @@ const Billing = () => {
             ${invoice.items.map(item => `
               <tr>
                 <td>${item.description}</td>
-                <td>${item.type === 'ready_made' ? 'Ready Made' : 'Custom Stitching'}</td>
+                <td>${item.type === 'ready_made' ? 'Ready Made' : 'Stitching'}</td>
                 <td>${item.hsn_code || '-'}</td>
                 <td>${item.quantity}</td>
                 <td>₹${item.unit_price.toFixed(2)}</td>
@@ -506,7 +547,7 @@ const Billing = () => {
                 <Receipt className="w-8 h-8 text-gray-800" />
                 Professional Billing
               </h1>
-              <p className="text-gray-600 text-lg">Generate professional bills for ready-made and custom stitching services</p>
+              <p className="text-gray-600 text-lg">Generate professional invoices for ready-made and custom stitching services</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button
@@ -723,9 +764,8 @@ const Billing = () => {
                           <SelectItem value="shirt">Shirt</SelectItem>
                           <SelectItem value="pant">Pant</SelectItem>
                           <SelectItem value="suit">Suit</SelectItem>
-                          <SelectItem value="kurta_pajama">Kurta Pajama</SelectItem>
-                          <SelectItem value="blouse">Blouse</SelectItem>
-                          <SelectItem value="saree_blouse">Saree Blouse</SelectItem>
+                          <SelectItem value="dress">Dress</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -982,8 +1022,286 @@ const Billing = () => {
             </div>
           </div>
         )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Customer Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <User className="w-5 h-5 mr-2" />
+                Customer Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="customer-search">Search Customer</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="customer-search"
+                    placeholder="Search by name or mobile..."
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
 
-        {/* Items List */}
+              {customerSearch && (
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {filteredCustomers.map((customer) => (
+                    <div
+                      key={customer.id}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        selectedCustomer?.id === customer.id
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                      onClick={() => {
+                        setSelectedCustomer(customer);
+                        setCustomerSearch('');
+                      }}
+                    >
+                      <div className="font-medium">{customer.name}</div>
+                      <div className="text-sm text-muted-foreground flex items-center">
+                        <Phone className="w-3 h-3 mr-1" />
+                        {customer.mobile}
+                      </div>
+                      {customer.email && (
+                        <div className="text-sm text-muted-foreground">{customer.email}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedCustomer && (
+                <div className="p-4 bg-muted rounded-lg">
+                  <h4 className="font-medium mb-2">Selected Customer:</h4>
+                  <div className="space-y-1 text-sm">
+                    <div><strong>Name:</strong> {selectedCustomer.name}</div>
+                    <div><strong>Mobile:</strong> {selectedCustomer.mobile}</div>
+                    {selectedCustomer.email && <div><strong>Email:</strong> {selectedCustomer.email}</div>}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Add Items */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <ShoppingBag className="w-5 h-5 mr-2" />
+                Add Items
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="item-type">Item Type</Label>
+                <Select
+                  value={newItem.type}
+                  onValueChange={(value: 'ready_made' | 'stitching') => 
+                    setNewItem({ ...newItem, type: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ready_made">
+                      <div className="flex items-center">
+                        <ShoppingBag className="w-4 h-4 mr-2" />
+                        Ready Made Item
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="stitching">
+                      <div className="flex items-center">
+                        <Scissors className="w-4 h-4 mr-2" />
+                        Stitching Service
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  placeholder="Item description..."
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="quantity">Quantity</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    value={newItem.quantity}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="unit-price">Unit Price (₹)</Label>
+                  <Input
+                    id="unit-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newItem.unit_price}
+                    onChange={(e) => setNewItem({ ...newItem, unit_price: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="hsn-code">HSN Code (Optional)</Label>
+                <Input
+                  id="hsn-code"
+                  placeholder="HSN/SAC Code"
+                  value={newItem.hsn_code}
+                  onChange={(e) => setNewItem({ ...newItem, hsn_code: e.target.value })}
+                />
+              </div>
+
+              <Button onClick={addItem} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Item
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Invoice Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Calculator className="w-5 h-5 mr-2" />
+                Invoice Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="gst-rate">GST Rate (%)</Label>
+                <Select
+                  value={gstRate.toString()}
+                  onValueChange={(value) => setGstRate(parseFloat(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0% (No GST)</SelectItem>
+                    <SelectItem value="5">5%</SelectItem>
+                    <SelectItem value="12">12%</SelectItem>
+                    <SelectItem value="18">18%</SelectItem>
+                    <SelectItem value="28">28%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="due-date">Due Date (Optional)</Label>
+                <Input
+                  id="due-date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Additional notes..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Notification Settings */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <MessageSquare className="w-4 h-4" />
+                    <span className="text-sm font-medium">Send Bill Receipt</span>
+                  </div>
+                  <Switch
+                    checked={sendNotification}
+                    onCheckedChange={setSendNotification}
+                  />
+                </div>
+
+                {sendNotification && (
+                  <div>
+                    <Label htmlFor="notification-channel">Notification Channel</Label>
+                    <Select
+                      value={notificationChannel}
+                      onValueChange={(value: 'sms' | 'whatsapp') => setNotificationChannel(value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sms">
+                          <div className="flex items-center">
+                            <Phone className="w-4 h-4 mr-2" />
+                            SMS
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="whatsapp">
+                          <div className="flex items-center">
+                            <MessageSquare className="w-4 h-4 mr-2" />
+                            WhatsApp
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {/* Totals Summary */}
+              {invoiceItems.length > 0 && (
+                <div className="p-4 bg-muted rounded-lg space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Subtotal:</span>
+                    <span>₹{subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>GST ({gstRate}%):</span>
+                    <span>₹{gstAmount.toFixed(2)}</span>
+                  </div>
+                  <Separator className="bg-gray-300" />
+                  <div className="flex justify-between font-bold text-lg">
+                    <span className="text-gray-900">Total:</span>
+                    <span className="text-gray-900">₹{totalAmount.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+
+              <Button 
+                onClick={createInvoice} 
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 text-lg font-medium"
+                disabled={loading || !selectedCustomer || invoiceItems.length === 0}
+              >
+                <Receipt className="w-5 h-5 mr-2" />
+                {loading ? 'Creating Bill...' : 'Generate Bill'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )}
+
+    {/* Items List */}
         {activeTab === 'create' && invoiceItems.length > 0 && (
           <Card className="bg-white border-gray-200 shadow-lg">
             <CardHeader className="bg-gray-50 border-b border-gray-200">
@@ -1059,7 +1377,7 @@ const Billing = () => {
           </Card>
         )}
 
-        {/* Bills List */}
+        {/* Invoice List */}
         {activeTab === 'list' && (
           <Card className="bg-white border-gray-200 shadow-lg">
             <CardHeader className="bg-gray-50 border-b border-gray-200">
