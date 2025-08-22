@@ -36,7 +36,9 @@ import {
   FileText,
   Settings,
   Scissors,
-  ShoppingBag
+  ShoppingBag,
+  MessageSquare,
+  Globe
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -92,6 +94,18 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         icon: BarChart3,
         path: '/reports',
         roles: ['admin'],
+      },
+      {
+        title: 'Notifications',
+        icon: MessageSquare,
+        path: '/notifications',
+        roles: ['admin', 'cashier'],
+      },
+      {
+        title: 'Customer Portal',
+        icon: Globe,
+        path: '/customer-portal',
+        roles: ['admin', 'cashier'],
       },
       {
         title: 'Settings',

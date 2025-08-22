@@ -7,10 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import NotificationService from '@/services/NotificationService';
 import { 
   Receipt, 
   Plus, 
@@ -25,7 +27,9 @@ import {
   FileText,
   Download,
   Printer,
-  Eye
+  Eye,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 
 interface Customer {
@@ -75,6 +79,10 @@ const Billing = () => {
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'create' | 'list'>('create');
+  const [sendNotification, setSendNotification] = useState(true);
+  const [notificationChannel, setNotificationChannel] = useState<'sms' | 'whatsapp'>('sms');
+
+  const notificationService = NotificationService.getInstance();
 
   // New item form state
   const [newItem, setNewItem] = useState({
@@ -144,7 +152,7 @@ const Billing = () => {
         created_at: order.created_at,
         due_date: order.due_date,
         notes: order.notes,
-        status: order.status === 'completed' ? 'paid' : 'draft'
+        status: order.status === 'delivered' ? ('paid' as const) : ('draft' as const)
       }));
       
       setInvoices(transformedInvoices);
@@ -264,6 +272,39 @@ const Billing = () => {
         description: `Invoice ${invoiceNumber} created successfully`,
       });
 
+      // Send notification if enabled
+      if (sendNotification && selectedCustomer) {
+        try {
+          const invoiceForNotification = {
+            ...orderResult,
+            invoice_number: invoiceNumber,
+            items: invoiceItems,
+            total_amount: totalAmount,
+            customer: selectedCustomer
+          };
+
+          const notificationSent = await notificationService.sendBillReceipt(
+            selectedCustomer, 
+            invoiceForNotification, 
+            notificationChannel
+          );
+
+          if (notificationSent) {
+            toast({
+              title: "Notification Sent",
+              description: `Bill receipt sent via ${notificationChannel.toUpperCase()}`,
+            });
+          }
+        } catch (notificationError) {
+          console.error('Failed to send notification:', notificationError);
+          toast({
+            title: "Notification Failed",
+            description: "Invoice created but notification failed to send",
+            variant: "destructive"
+          });
+        }
+      }
+
       // Reset form
       setSelectedCustomer(null);
       setInvoiceItems([]);
@@ -296,6 +337,31 @@ const Billing = () => {
     printWindow.document.write(invoiceHTML);
     printWindow.document.close();
     printWindow.print();
+  };
+
+  const sendInvoiceNotification = async (invoice: Invoice) => {
+    try {
+      const success = await notificationService.sendBillReceipt(
+        invoice.customer,
+        invoice,
+        'sms' // Default to SMS, could be made configurable
+      );
+
+      if (success) {
+        toast({
+          title: "Notification Sent",
+          description: `Bill receipt sent to ${invoice.customer.name}`,
+        });
+      } else {
+        throw new Error('Failed to send notification');
+      }
+    } catch (error) {
+      toast({
+        title: "Notification Failed",
+        description: "Failed to send bill receipt notification",
+        variant: "destructive"
+      });
+    }
   };
 
   const generateInvoiceHTML = (invoice: Invoice) => {
@@ -638,6 +704,50 @@ const Billing = () => {
                 />
               </div>
 
+              <Separator />
+
+              {/* Notification Settings */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <MessageSquare className="w-4 h-4" />
+                    <span className="text-sm font-medium">Send Bill Receipt</span>
+                  </div>
+                  <Switch
+                    checked={sendNotification}
+                    onCheckedChange={setSendNotification}
+                  />
+                </div>
+
+                {sendNotification && (
+                  <div>
+                    <Label htmlFor="notification-channel">Notification Channel</Label>
+                    <Select
+                      value={notificationChannel}
+                      onValueChange={(value: 'sms' | 'whatsapp') => setNotificationChannel(value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sms">
+                          <div className="flex items-center">
+                            <Phone className="w-4 h-4 mr-2" />
+                            SMS
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="whatsapp">
+                          <div className="flex items-center">
+                            <MessageSquare className="w-4 h-4 mr-2" />
+                            WhatsApp
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
               {/* Totals Summary */}
               {invoiceItems.length > 0 && (
                 <div className="p-4 bg-muted rounded-lg space-y-2">
@@ -772,8 +882,17 @@ const Billing = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => generatePDF(invoice)}
+                          title="Print Invoice"
                         >
                           <Printer className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => sendInvoiceNotification(invoice)}
+                          title="Send Notification"
+                        >
+                          <Send className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>

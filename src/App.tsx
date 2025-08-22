@@ -16,6 +16,8 @@ import Inventory from "./pages/Inventory";
 import Payments from "./pages/Payments";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import NotificationCenter from "./pages/NotificationCenter";
+import CustomerPortal from "./pages/CustomerPortal";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -96,6 +98,16 @@ const AppRoutes = () => {
       <Route path="/settings" element={
         <ProtectedRoute>
           <Settings />
+        </ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <ProtectedRoute>
+          <NotificationCenter />
+        </ProtectedRoute>
+      } />
+      <Route path="/customer-portal" element={
+        <ProtectedRoute>
+          <CustomerPortal />
         </ProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />
