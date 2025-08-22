@@ -5,10 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Search, Phone, Mail, MapPin, Edit2 } from 'lucide-react';
+import { Users, Plus, Search, Phone, Mail, MapPin, Edit2, Trash2, Eye, Calendar, ShoppingBag, Ruler, ArrowRight, Filter, Grid3X3, List, MoreVertical } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface Customer {
   id: string;
@@ -19,13 +23,25 @@ interface Customer {
   created_at: string;
 }
 
+interface CustomerStats {
+  totalOrders: number;
+  totalSpent: number;
+  lastOrderDate?: string;
+}
+
 const Customers = () => {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+  const [customerStats, setCustomerStats] = useState<Record<string, CustomerStats>>({});
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -56,6 +72,11 @@ const Customers = () => {
       }
 
       setCustomers(data || []);
+      
+      // Fetch customer statistics
+      if (data?.length) {
+        await fetchCustomerStats(data);
+      }
     } catch (error) {
       console.error('Error fetching customers:', error);
       toast({
@@ -68,8 +89,44 @@ const Customers = () => {
     }
   };
 
+  const fetchCustomerStats = async (customerList: Customer[]) => {
+    const stats: Record<string, CustomerStats> = {};
+    
+    for (const customer of customerList) {
+      try {
+        // Fetch orders for this customer
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('total_amount, created_at')
+          .eq('customer_id', customer.id);
+
+        if (orders) {
+          stats[customer.id] = {
+            totalOrders: orders.length,
+            totalSpent: orders.reduce((sum, order) => sum + (order.total_amount || 0), 0),
+            lastOrderDate: orders.length > 0 ? orders[0].created_at : undefined,
+          };
+        } else {
+          stats[customer.id] = {
+            totalOrders: 0,
+            totalSpent: 0,
+          };
+        }
+      } catch (error) {
+        console.error(`Error fetching stats for customer ${customer.id}:`, error);
+        stats[customer.id] = {
+          totalOrders: 0,
+          totalSpent: 0,
+        };
+      }
+    }
+    
+    setCustomerStats(stats);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
     try {
       if (editingCustomer) {
@@ -111,7 +168,39 @@ const Customers = () => {
         description: error.message || 'Failed to save customer',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleDelete = async (customer: Customer) => {
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', customer.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Customer deleted successfully',
+      });
+
+      fetchCustomers();
+    } catch (error: any) {
+      console.error('Error deleting customer:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete customer',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleView = (customer: Customer) => {
+    setViewingCustomer(customer);
+    setIsViewDialogOpen(true);
   };
 
   const handleEdit = (customer: Customer) => {
@@ -131,202 +220,640 @@ const Customers = () => {
     setFormData({ name: '', mobile: '', email: '', address: '' });
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.mobile.includes(searchTerm) ||
-    (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const handleCloseViewDialog = () => {
+    setIsViewDialogOpen(false);
+    setViewingCustomer(null);
+  };
+
+  const getCustomerInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getCustomerTypeLabel = (stats: CustomerStats) => {
+    if (stats.totalOrders === 0) return { label: 'New', color: 'bg-blue-100 text-blue-800' };
+    if (stats.totalOrders >= 10) return { label: 'VIP', color: 'bg-purple-100 text-purple-800' };
+    if (stats.totalOrders >= 5) return { label: 'Loyal', color: 'bg-green-100 text-green-800' };
+    return { label: 'Regular', color: 'bg-gray-100 text-gray-800' };
+  };
+
+  const filteredCustomers = customers.filter(customer => {
+    const matchesSearch = 
+      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.mobile.includes(searchTerm) ||
+      (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    if (filterType === 'all') return matchesSearch;
+    
+    const stats = customerStats[customer.id];
+    if (!stats) return matchesSearch;
+    
+    const customerType = getCustomerTypeLabel(stats);
+    return matchesSearch && customerType.label.toLowerCase() === filterType;
+  });
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-gray-900 mx-auto"></div>
+          <p className="text-gray-600 text-lg font-medium">Loading customers...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center space-x-2">
-            <Users className="h-8 w-8 text-primary" />
-            <span>Customer Management</span>
-          </h1>
-          <p className="text-muted-foreground">
-            Manage your customer database and contact information
-          </p>
-        </div>
-        
-        <Dialog 
-          open={isAddDialogOpen} 
-          onOpenChange={(open) => {
-            if (!open) {
-              handleCloseDialog();
-            } else {
-              setIsAddDialogOpen(true);
-            }
-          }}
-        >
-          <div className="flex space-x-2">
-            <Button onClick={() => navigate('/customers/new')} className="bg-cyan-500 hover:bg-cyan-600">
-              <Plus className="mr-2 h-4 w-4" />
-              New Customer Account
-            </Button>
-            <DialogTrigger asChild>
-              <Button variant="outline">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+      <div className="container mx-auto px-4 py-6 max-w-7xl space-y-6">
+        {/* Header Section */}
+        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
+            <div className="space-y-2">
+              <h1 className="text-4xl font-bold tracking-tight text-gray-900 flex items-center space-x-3">
+                <div className="p-3 bg-gray-900 rounded-xl">
+                  <Users className="h-8 w-8 text-white" />
+                </div>
+                <span>Customer Management</span>
+              </h1>
+              <p className="text-gray-600 text-lg">
+                Manage your customer database with advanced analytics and insights
+              </p>
+              <div className="flex items-center space-x-6 text-sm text-gray-500">
+                <span className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>{customers.length} Total Customers</span>
+                </span>
+                <span className="flex items-center space-x-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span>{filteredCustomers.length} Showing</span>
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+              <Dialog 
+                open={isAddDialogOpen} 
+                onOpenChange={(open) => {
+                  if (!open) {
+                    handleCloseDialog();
+                  } else {
+                    setIsAddDialogOpen(true);
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Quick Add Customer
+                  </Button>
+                </DialogTrigger>
+              </Dialog>
+              
+              <Button 
+                onClick={() => navigate('/customers/new')} 
+                className="bg-gray-900 hover:bg-gray-800 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+              >
                 <Plus className="mr-2 h-4 w-4" />
-                Quick Add Customer
+                New Customer Account
               </Button>
-            </DialogTrigger>
+            </div>
           </div>
-          <DialogContent>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-6">
+              <Label className="text-gray-700 font-medium mb-2 block">Search Customers</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <Input
+                  placeholder="Search by name, mobile, or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 border-gray-300 focus:border-gray-900 focus:ring-gray-900 text-base py-3"
+                />
+              </div>
+            </div>
+            
+            <div className="lg:col-span-3">
+              <Label className="text-gray-700 font-medium mb-2 block">Filter by Type</Label>
+              <div className="relative">
+                <Filter className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <select 
+                  value={filterType} 
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:border-gray-900 focus:ring-gray-900 bg-white"
+                >
+                  <option value="all">All Customers</option>
+                  <option value="new">New Customers</option>
+                  <option value="regular">Regular Customers</option>
+                  <option value="loyal">Loyal Customers</option>
+                  <option value="vip">VIP Customers</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="lg:col-span-3">
+              <Label className="text-gray-700 font-medium mb-2 block">View Mode</Label>
+              <div className="flex space-x-2">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="flex-1"
+                >
+                  <Grid3X3 className="h-4 w-4 mr-1" />
+                  Grid
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="flex-1"
+                >
+                  <List className="h-4 w-4 mr-1" />
+                  List
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Customer List/Grid */}
+        <div className="space-y-4">
+          {filteredCustomers.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-lg border-0 p-12 text-center backdrop-blur-sm bg-white/90">
+              <div className="space-y-4">
+                <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center">
+                  <Users className="h-12 w-12 text-gray-400" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">No customers found</h3>
+                <p className="text-gray-600 max-w-md mx-auto">
+                  {customers.length === 0 
+                    ? "Get started by adding your first customer to build your customer database" 
+                    : "Try adjusting your search terms or filters to find the customers you're looking for"
+                  }
+                </p>
+                {customers.length === 0 && (
+                  <Button 
+                    onClick={() => navigate('/customers/new')}
+                    className="bg-gray-900 hover:bg-gray-800 text-white mt-4"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Your First Customer
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className={viewMode === 'grid' 
+              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
+              : "space-y-4"
+            }>
+              {filteredCustomers.map((customer, index) => {
+                const stats = customerStats[customer.id] || { totalOrders: 0, totalSpent: 0 };
+                const customerType = getCustomerTypeLabel(stats);
+                
+                return (
+                  <div
+                    key={customer.id}
+                    className={`group bg-white rounded-xl shadow-lg border-0 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm bg-white/90 ${
+                      viewMode === 'list' ? 'p-4' : 'p-6'
+                    }`}
+                    style={{
+                      animationDelay: `${index * 100}ms`,
+                      animation: 'fadeInUp 0.5s ease-out forwards'
+                    }}
+                  >
+                    <div className={`${viewMode === 'list' ? 'flex items-center space-x-4' : 'space-y-4'}`}>
+                      {/* Avatar and Basic Info */}
+                      <div className={`${viewMode === 'list' ? 'flex-shrink-0' : 'flex items-start justify-between'}`}>
+                        <div className="flex items-center space-x-3">
+                          <Avatar className="h-12 w-12 border-2 border-gray-200 group-hover:border-gray-900 transition-colors">
+                            <AvatarFallback className="bg-gray-900 text-white font-bold">
+                              {getCustomerInitials(customer.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-gray-700 transition-colors">
+                              {customer.name}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              Customer since {new Date(customer.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {viewMode === 'grid' && (
+                          <div className="flex items-center space-x-2">
+                            <Badge className={`${customerType.color} text-xs font-medium px-2 py-1`}>
+                              {customerType.label}
+                            </Badge>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => handleView(customer)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEdit(customer)}>
+                                  <Edit2 className="h-4 w-4 mr-2" />
+                                  Edit Customer
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => navigate('/measurements', { state: { customerId: customer.id } })}>
+                                  <Ruler className="h-4 w-4 mr-2" />
+                                  Measurements
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600 focus:text-red-600">
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Delete Customer
+                                    </DropdownMenuItem>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This action cannot be undone. This will permanently delete {customer.name}'s record and all associated data.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction 
+                                        onClick={() => handleDelete(customer)}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        Delete Customer
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Contact Information */}
+                      <div className={`${viewMode === 'list' ? 'flex-1 grid grid-cols-1 md:grid-cols-3 gap-4' : 'space-y-3'}`}>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Phone className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-700">{customer.mobile}</span>
+                          </div>
+                          
+                          {customer.email && (
+                            <div className="flex items-center space-x-2 text-sm">
+                              <Mail className="h-4 w-4 text-gray-400" />
+                              <span className="text-gray-700 truncate">{customer.email}</span>
+                            </div>
+                          )}
+                          
+                          {customer.address && (
+                            <div className="flex items-start space-x-2 text-sm">
+                              <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                              <span className="text-gray-700 line-clamp-2">{customer.address}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Statistics */}
+                        {viewMode === 'grid' && (
+                          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-gray-900">{stats.totalOrders}</div>
+                              <div className="text-xs text-gray-500">Orders</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-green-600">₹{stats.totalSpent}</div>
+                              <div className="text-xs text-gray-500">Total Spent</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-sm font-medium text-gray-900">
+                                {stats.lastOrderDate ? new Date(stats.lastOrderDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Never'}
+                              </div>
+                              <div className="text-xs text-gray-500">Last Order</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons for List View */}
+                      {viewMode === 'list' && (
+                        <div className="flex items-center space-x-2">
+                          <Badge className={`${customerType.color} text-xs font-medium px-2 py-1`}>
+                            {customerType.label}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleView(customer)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(customer)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate('/measurements', { state: { customerId: customer.id } })}>
+                                <Ruler className="h-4 w-4 mr-2" />
+                                Measurements
+                              </DropdownMenuItem>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-red-600">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete {customer.name}? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction 
+                                      onClick={() => handleDelete(customer)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Add Customer Dialog */}
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-2xl font-bold text-gray-900">
                 {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
               </DialogTitle>
-              <DialogDescription>
-                {editingCustomer ? 'Update customer information' : 'Enter customer details below'}
+              <DialogDescription className="text-gray-600">
+                {editingCustomer ? 'Update customer information below' : 'Enter customer details to add to your database'}
               </DialogDescription>
             </DialogHeader>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Enter customer's full name"
-                  required
-                />
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-gray-700 font-medium">Full Name *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Enter customer's full name"
+                    className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="mobile" className="text-gray-700 font-medium">Mobile Number *</Label>
+                  <Input
+                    id="mobile"
+                    value={formData.mobile}
+                    onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                    placeholder="Enter mobile number"
+                    className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-gray-700 font-medium">Email Address (Optional)</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="Enter email address"
+                    className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="address" className="text-gray-700 font-medium">Address (Optional)</Label>
+                  <Textarea
+                    id="address"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Enter customer address"
+                    className="border-gray-300 focus:border-gray-900 focus:ring-gray-900 min-h-[80px]"
+                    rows={3}
+                  />
+                </div>
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="mobile">Mobile Number *</Label>
-                <Input
-                  id="mobile"
-                  value={formData.mobile}
-                  onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                  placeholder="Enter mobile number"
-                  required
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">Email (Optional)</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="Enter email address"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="address">Address (Optional)</Label>
-                <Textarea
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Enter customer address"
-                  rows={3}
-                />
-              </div>
-              
-              <div className="flex space-x-2">
-                <Button type="submit" className="flex-1">
-                  {editingCustomer ? 'Update Customer' : 'Add Customer'}
+              <div className="flex space-x-3 pt-4 border-t border-gray-200">
+                <Button 
+                  type="submit" 
+                  className="flex-1 bg-gray-900 hover:bg-gray-800 text-white"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : (editingCustomer ? 'Update Customer' : 'Add Customer')}
                 </Button>
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                <Button type="button" variant="outline" onClick={handleCloseDialog} className="border-gray-300 text-gray-700 hover:bg-gray-50">
                   Cancel
                 </Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* View Customer Dialog */}
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            {viewingCustomer && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center space-x-4">
+                    <Avatar className="h-16 w-16 border-2 border-gray-200">
+                      <AvatarFallback className="bg-gray-900 text-white text-xl font-bold">
+                        {getCustomerInitials(viewingCustomer.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <DialogTitle className="text-2xl font-bold text-gray-900">
+                        {viewingCustomer.name}
+                      </DialogTitle>
+                      <DialogDescription className="text-gray-600">
+                        Customer since {new Date(viewingCustomer.created_at).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+                
+                <div className="space-y-6">
+                  {/* Customer Statistics */}
+                  <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-gray-900">
+                        {customerStats[viewingCustomer.id]?.totalOrders || 0}
+                      </div>
+                      <div className="text-sm text-gray-600 flex items-center justify-center space-x-1">
+                        <ShoppingBag className="h-4 w-4" />
+                        <span>Total Orders</span>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-green-600">
+                        ₹{customerStats[viewingCustomer.id]?.totalSpent || 0}
+                      </div>
+                      <div className="text-sm text-gray-600">Total Spent</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-gray-900">
+                        {customerStats[viewingCustomer.id]?.lastOrderDate 
+                          ? new Date(customerStats[viewingCustomer.id].lastOrderDate!).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            })
+                          : 'Never'
+                        }
+                      </div>
+                      <div className="text-sm text-gray-600 flex items-center justify-center space-x-1">
+                        <Calendar className="h-4 w-4" />
+                        <span>Last Order</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Contact Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-gray-600 text-sm">Mobile Number</Label>
+                        <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium">{viewingCustomer.mobile}</span>
+                        </div>
+                      </div>
+                      
+                      {viewingCustomer.email && (
+                        <div className="space-y-2">
+                          <Label className="text-gray-600 text-sm">Email Address</Label>
+                          <div className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg">
+                            <Mail className="h-4 w-4 text-gray-400" />
+                            <span className="font-medium">{viewingCustomer.email}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {viewingCustomer.address && (
+                      <div className="space-y-2">
+                        <Label className="text-gray-600 text-sm">Address</Label>
+                        <div className="flex items-start space-x-2 p-3 bg-gray-50 rounded-lg">
+                          <MapPin className="h-4 w-4 text-gray-400 mt-0.5" />
+                          <span className="font-medium">{viewingCustomer.address}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
+                    <Button 
+                      onClick={() => {
+                        handleCloseViewDialog();
+                        handleEdit(viewingCustomer);
+                      }}
+                      variant="outline"
+                      className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      <Edit2 className="mr-2 h-4 w-4" />
+                      Edit Customer
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        handleCloseViewDialog();
+                        navigate('/measurements', { state: { customerId: viewingCustomer.id } });
+                      }}
+                      variant="outline"
+                      className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      <Ruler className="mr-2 h-4 w-4" />
+                      Measurements
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        handleCloseViewDialog();
+                        navigate('/orders', { state: { customerId: viewingCustomer.id } });
+                      }}
+                      className="flex-1 bg-gray-900 hover:bg-gray-800 text-white"
+                    >
+                      <ArrowRight className="mr-2 h-4 w-4" />
+                      View Orders
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search customers by name, mobile, or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Customer List */}
-      <div className="grid gap-4">
-        {filteredCustomers.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center py-8">
-                <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium">No customers found</h3>
-                <p className="text-muted-foreground">
-                  {customers.length === 0 
-                    ? "Get started by adding your first customer" 
-                    : "Try adjusting your search terms"
-                  }
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredCustomers.map((customer) => (
-            <Card key={customer.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg">{customer.name}</CardTitle>
-                    <CardDescription>
-                      Customer since {new Date(customer.created_at).toLocaleDateString()}
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEdit(customer)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-2">
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{customer.mobile}</span>
-                  </div>
-                  
-                  {customer.email && (
-                    <div className="flex items-center space-x-2 text-sm">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span>{customer.email}</span>
-                    </div>
-                  )}
-                  
-                  {customer.address && (
-                    <div className="flex items-center space-x-2 text-sm">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span className="line-clamp-2">{customer.address}</span>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      {/* CSS Animation Styles */}
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 };

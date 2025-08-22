@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserPlus, Calendar, Shirt, Package, Scissors, Users, DollarSign, RefreshCw, Save } from 'lucide-react';
+import { UserPlus, Calendar, Shirt, Package, Scissors, Users, DollarSign, RefreshCw, Save, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import MeasurementModal from '@/components/MeasurementModal';
 
@@ -310,8 +310,17 @@ const NewCustomer = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
       <div className="container mx-auto px-4 py-6 max-w-7xl">
         {/* Header */}
-                {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 relative">
+          {/* Back Button */}
+          <Button
+            onClick={() => navigate('/customers')}
+            variant="outline"
+            className="absolute left-0 top-0 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 px-4 py-2"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Customers
+          </Button>
+          
           <div className="flex items-center justify-center space-x-3 mb-4">
             <UserPlus className="h-10 w-10 text-gray-900" />
             <h1 className="text-4xl font-bold text-gray-900 tracking-tight">NEW CUSTOMER</h1>

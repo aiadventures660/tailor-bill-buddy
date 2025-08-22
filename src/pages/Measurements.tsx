@@ -5,9 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Ruler, Plus, Search, User } from 'lucide-react';
+import { Ruler, Plus, Search, User, Edit, Trash2, Phone, Calendar, Filter, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Customer {
@@ -19,11 +23,12 @@ interface Customer {
 interface Measurement {
   id: string;
   customer_id: string;
-  clothing_type: keyof typeof clothingTypeFields;
+  clothing_type: 'shirt' | 'pant' | 'kurta_pajama' | 'suit' | 'blouse' | 'saree_blouse';
   measurements: Record<string, number>;
   notes?: string;
   customers: Customer;
   created_at: string;
+  updated_at?: string;
 }
 
 const clothingTypeFields = {
@@ -43,35 +48,39 @@ const clothingTypeFields = {
     { name: 'thigh', label: 'Thigh', unit: 'inches' },
     { name: 'knee', label: 'Knee', unit: 'inches' },
   ],
-  kurta: [
+  kurta_pajama: [
     { name: 'chest', label: 'Chest', unit: 'inches' },
     { name: 'length', label: 'Kurta Length', unit: 'inches' },
     { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
     { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
     { name: 'collar', label: 'Collar', unit: 'inches' },
+    { name: 'pajama_waist', label: 'Pajama Waist', unit: 'inches' },
+    { name: 'pajama_length', label: 'Pajama Length', unit: 'inches' },
   ],
-  pajama: [
-    { name: 'waist', label: 'Waist', unit: 'inches' },
-    { name: 'length', label: 'Pajama Length', unit: 'inches' },
-    { name: 'bottom', label: 'Bottom', unit: 'inches' },
-  ],
-  coat: [
+  suit: [
     { name: 'chest', label: 'Chest', unit: 'inches' },
     { name: 'waist', label: 'Waist', unit: 'inches' },
     { name: 'hip', label: 'Hip', unit: 'inches' },
     { name: 'length', label: 'Coat Length', unit: 'inches' },
     { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
     { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
+    { name: 'pant_waist', label: 'Pant Waist', unit: 'inches' },
+    { name: 'pant_length', label: 'Pant Length', unit: 'inches' },
   ],
-  bandi: [
+  blouse: [
     { name: 'chest', label: 'Chest', unit: 'inches' },
-    { name: 'length', label: 'Bandi Length', unit: 'inches' },
+    { name: 'length', label: 'Blouse Length', unit: 'inches' },
     { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
-  ],
-  westcot: [
-    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
     { name: 'waist', label: 'Waist', unit: 'inches' },
-    { name: 'length', label: 'Length', unit: 'inches' },
+  ],
+  saree_blouse: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'length', label: 'Blouse Length', unit: 'inches' },
+    { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
+    { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'armhole', label: 'Armhole', unit: 'inches' },
   ],
 };
 
@@ -80,38 +89,139 @@ const Measurements = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editingMeasurement, setEditingMeasurement] = useState<Measurement | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [selectedClothingType, setSelectedClothingType] = useState<keyof typeof clothingTypeFields>('shirt');
   const [measurementData, setMeasurementData] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [realTimeEnabled, setRealTimeEnabled] = useState(true);
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  useEffect(() => {
+    // Set up real-time subscription
+    if (realTimeEnabled) {
+      const measurementsSubscription = supabase
+        .channel('measurements-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'measurements'
+          },
+          (payload) => {
+            console.log('Real-time update:', payload);
+            handleRealTimeUpdate(payload);
+          }
+        )
+        .subscribe();
+
+      const customersSubscription = supabase
+        .channel('customers-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'customers'
+          },
+          (payload) => {
+            console.log('Customer real-time update:', payload);
+            fetchCustomers(); // Refresh customers when they change
+          }
+        )
+        .subscribe();
+
+      return () => {
+        measurementsSubscription.unsubscribe();
+        customersSubscription.unsubscribe();
+      };
+    }
+  }, [realTimeEnabled]);
+
+  const handleRealTimeUpdate = async (payload: any) => {
+    if (payload.eventType === 'INSERT') {
+      // Fetch the new measurement with customer data
+      await fetchMeasurementById(payload.new.id);
+    } else if (payload.eventType === 'UPDATE') {
+      // Update existing measurement
+      setMeasurements(prev => 
+        prev.map(m => 
+          m.id === payload.new.id 
+            ? { ...m, ...payload.new, measurements: payload.new.measurements }
+            : m
+        )
+      );
+      toast({
+        title: 'Real-time Update',
+        description: 'A measurement was updated',
+      });
+    } else if (payload.eventType === 'DELETE') {
+      // Remove deleted measurement
+      setMeasurements(prev => prev.filter(m => m.id !== payload.old.id));
+      toast({
+        title: 'Real-time Update',
+        description: 'A measurement was deleted',
+      });
+    }
+  };
+
+  const fetchMeasurementById = async (id: string) => {
     try {
-      const { data: measurementsData, error: measurementsError } = await supabase
+      const { data, error } = await supabase
         .from('measurements')
         .select(`
           *,
           customers (id, name, mobile)
         `)
-        .order('created_at', { ascending: false });
+        .eq('id', id)
+        .single();
 
-      const { data: customersData, error: customersError } = await supabase
-        .from('customers')
-        .select('id, name, mobile')
-        .order('name');
+      if (error) throw error;
+      
+      if (data) {
+        setMeasurements(prev => [data as Measurement, ...prev.filter(m => m.id !== id)]);
+        toast({
+          title: 'Success',
+          description: 'New measurement added successfully',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching new measurement:', error);
+    }
+  };
 
-      if (measurementsError) throw measurementsError;
-      if (customersError) throw customersError;
+  const toggleCardExpansion = (measurementId: string) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(measurementId)) {
+        newSet.delete(measurementId);
+      } else {
+        newSet.add(measurementId);
+      }
+      return newSet;
+    });
+  };
 
-      setMeasurements(measurementsData || []);
-      setCustomers(customersData || []);
+  const toggleAllCards = () => {
+    if (expandedCards.size === filteredMeasurements.length) {
+      setExpandedCards(new Set());
+    } else {
+      setExpandedCards(new Set(filteredMeasurements.map(m => m.id)));
+    }
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([fetchMeasurements(), fetchCustomers()]);
     } catch (error: any) {
       console.error('Error fetching data:', error);
       toast({
@@ -122,6 +232,29 @@ const Measurements = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchMeasurements = async () => {
+    const { data: measurementsData, error: measurementsError } = await supabase
+      .from('measurements')
+      .select(`
+        *,
+        customers (id, name, mobile)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (measurementsError) throw measurementsError;
+    setMeasurements((measurementsData || []) as Measurement[]);
+  };
+
+  const fetchCustomers = async () => {
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name, mobile')
+      .order('name');
+
+    if (customersError) throw customersError;
+    setCustomers(customersData || []);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,23 +286,49 @@ const Measurements = () => {
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('measurements')
-        .upsert({
-          customer_id: selectedCustomer,
-          clothing_type: selectedClothingType,
-          measurements: measurementData,
-          notes: notes || null,
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: 'Success',
-        description: 'Measurements saved successfully',
+      // Convert string measurements to numbers for storage
+      const numericMeasurements: Record<string, number> = {};
+      Object.entries(measurementData).forEach(([key, value]) => {
+        numericMeasurements[key] = parseFloat(value) || 0;
       });
 
-      await fetchData(); // Refresh the data
+      const measurementPayload = {
+        customer_id: selectedCustomer,
+        clothing_type: selectedClothingType,
+        measurements: numericMeasurements,
+        notes: notes || null,
+      };
+
+      if (editingMeasurement) {
+        // Update existing measurement
+        const { error } = await supabase
+          .from('measurements')
+          .update(measurementPayload)
+          .eq('id', editingMeasurement.id);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Success',
+          description: 'Measurements updated successfully',
+        });
+      } else {
+        // Create new measurement
+        const { error } = await supabase
+          .from('measurements')
+          .insert(measurementPayload);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Success',
+          description: 'Measurements saved successfully',
+        });
+      }
+
+      // Always refresh data to ensure UI is up to date
+      await fetchMeasurements();
+      
       handleCloseDialog();
     } catch (error: any) {
       console.error('Error saving measurements:', error);
@@ -183,230 +342,512 @@ const Measurements = () => {
     }
   };
 
+  const handleEdit = (measurement: Measurement) => {
+    setEditingMeasurement(measurement);
+    setSelectedCustomer(measurement.customer_id);
+    setSelectedClothingType(measurement.clothing_type);
+    
+    // Convert number values to strings for form inputs
+    const stringMeasurements: Record<string, string> = {};
+    Object.entries(measurement.measurements).forEach(([key, value]) => {
+      stringMeasurements[key] = String(value);
+    });
+    setMeasurementData(stringMeasurements);
+    setNotes(measurement.notes || '');
+    setIsAddDialogOpen(true);
+  };
+
+  const handleDelete = async (measurementId: string) => {
+    try {
+      const { error } = await supabase
+        .from('measurements')
+        .delete()
+        .eq('id', measurementId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Measurement deleted successfully',
+      });
+
+      // Always refresh data to ensure UI is up to date
+      await fetchMeasurements();
+    } catch (error: any) {
+      console.error('Error deleting measurement:', error);
+      toast({
+        title: 'Error deleting measurement',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCloseDialog = () => {
     setIsAddDialogOpen(false);
+    setEditingMeasurement(null);
     setSelectedCustomer('');
     setSelectedClothingType('shirt');
     setMeasurementData({});
     setNotes('');
   };
 
-  const filteredMeasurements = measurements.filter(measurement =>
-    measurement.customers.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    measurement.customers.mobile.includes(searchTerm) ||
-    measurement.clothing_type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMeasurements = measurements.filter(measurement => {
+    const matchesSearch = 
+      measurement.customers.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      measurement.customers.mobile.includes(searchTerm) ||
+      measurement.clothing_type.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesFilter = filterType === 'all' || measurement.clothing_type === filterType;
+    
+    return matchesSearch && matchesFilter;
+  });
 
   const getCurrentFields = () => clothingTypeFields[selectedClothingType] || [];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const getClothingTypeLabel = (type: string) => {
+    return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center space-x-2">
-            <Ruler className="h-8 w-8 text-primary" />
-            <span>Measurements</span>
-          </h1>
-          <p className="text-muted-foreground">
-            Digital measurement forms for all clothing types
-          </p>
-        </div>
-        
-        <Dialog 
-          open={isAddDialogOpen} 
-          onOpenChange={(open) => {
-            if (!open) {
-              handleCloseDialog();
-            } else {
-              setIsAddDialogOpen(true);
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Measurements
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Add/Update Measurements</DialogTitle>
-              <DialogDescription>
-                Record customer measurements for different clothing types
-              </DialogDescription>
-            </DialogHeader>
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+        {/* Header - Responsive */}
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+            <div>
+              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-gray-900 flex items-center space-x-2 sm:space-x-3">
+                <Ruler className="h-6 w-6 sm:h-10 sm:w-10 text-gray-900" />
+                <span>Professional Measurements</span>
+              </h1>
+              <p className="text-gray-600 mt-2 text-sm sm:text-lg">
+                Digital measurement forms with real-time CRUD operations
+              </p>
+            </div>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Customer *</Label>
-                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name} - {customer.mobile}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Clothing Type *</Label>
-                  <Select 
-                    value={selectedClothingType} 
-                    onValueChange={(value: keyof typeof clothingTypeFields) => {
-                      setSelectedClothingType(value);
-                      setMeasurementData({});
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(clothingTypeFields).map((type) => (
-                        <SelectItem key={type} value={type} className="capitalize">
-                          {type.replace('_', ' ')}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              {/* Real-time toggle */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRealTimeEnabled(!realTimeEnabled)}
+                className={`${realTimeEnabled ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-300 text-gray-700'}`}
+              >
+                {realTimeEnabled ? 'Real-time ON' : 'Real-time OFF'}
+              </Button>
               
-              {/* Measurement Fields */}
-              <div className="space-y-4">
-                <Label className="text-base font-medium">Measurements</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  {getCurrentFields().map((field) => (
-                    <div key={field.name} className="space-y-2">
-                      <Label htmlFor={field.name}>
-                        {field.label} ({field.unit})
-                      </Label>
-                      <Input
-                        id={field.name}
-                        type="number"
-                        step="0.1"
-                        value={measurementData[field.name] || ''}
-                        onChange={(e) => setMeasurementData({
-                          ...measurementData,
-                          [field.name]: e.target.value
-                        })}
-                        placeholder={`Enter ${field.label.toLowerCase()}`}
+              <Dialog 
+                open={isAddDialogOpen} 
+                onOpenChange={(open) => {
+                  if (!open) {
+                    handleCloseDialog();
+                  } else {
+                    setIsAddDialogOpen(true);
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button className="bg-gray-900 hover:bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-lg font-semibold">
+                    <Plus className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="hidden sm:inline">Add New Measurement</span>
+                    <span className="sm:hidden">Add</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto bg-white border-gray-200">
+                  <DialogHeader className="border-b border-gray-100 pb-4">
+                    <DialogTitle className="text-xl sm:text-2xl font-bold text-gray-900">
+                      {editingMeasurement ? 'Edit Measurement' : 'Add New Measurement'}
+                    </DialogTitle>
+                    <DialogDescription className="text-gray-600 text-sm sm:text-lg">
+                      {editingMeasurement ? 'Update customer measurements for different clothing types' : 'Record customer measurements for different clothing types'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 pt-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-gray-700 font-semibold">Customer *</Label>
+                        <Select 
+                          value={selectedCustomer} 
+                          onValueChange={setSelectedCustomer}
+                          disabled={editingMeasurement !== null}
+                        >
+                          <SelectTrigger className="border-gray-300 focus:border-gray-900 focus:ring-gray-900">
+                            <SelectValue placeholder="Select customer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {customers.map((customer) => (
+                              <SelectItem key={customer.id} value={customer.id}>
+                                <span className="block sm:hidden">{customer.name}</span>
+                                <span className="hidden sm:block">{customer.name} - {customer.mobile}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label className="text-gray-700 font-semibold">Clothing Type *</Label>
+                        <Select 
+                          value={selectedClothingType} 
+                          onValueChange={(value: keyof typeof clothingTypeFields) => {
+                            setSelectedClothingType(value);
+                            if (!editingMeasurement) {
+                              setMeasurementData({});
+                            }
+                          }}
+                          disabled={editingMeasurement !== null}
+                        >
+                          <SelectTrigger className="border-gray-300 focus:border-gray-900 focus:ring-gray-900">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.keys(clothingTypeFields).map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {getClothingTypeLabel(type)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    {/* Measurement Fields - Responsive Grid */}
+                    <div className="space-y-4">
+                      <div className="border-t border-gray-200 pt-4">
+                        <Label className="text-lg sm:text-xl font-bold text-gray-900 mb-4 block">
+                          {getClothingTypeLabel(selectedClothingType)} Measurements
+                        </Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                          {getCurrentFields().map((field) => (
+                            <div key={field.name} className="space-y-2">
+                              <Label htmlFor={field.name} className="text-gray-700 font-medium text-sm">
+                                {field.label} ({field.unit})
+                              </Label>
+                              <Input
+                                id={field.name}
+                                type="number"
+                                step="0.1"
+                                value={measurementData[field.name] || ''}
+                                onChange={(e) => setMeasurementData({
+                                  ...measurementData,
+                                  [field.name]: e.target.value
+                                })}
+                                placeholder={`Enter ${field.label.toLowerCase()}`}
+                                className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="notes" className="text-gray-700 font-semibold">Notes (Optional)</Label>
+                      <Textarea
+                        id="notes"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Any special notes or instructions..."
+                        rows={3}
+                        className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
                       />
                     </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes (Optional)</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Any special notes or instructions..."
-                  rows={3}
+                    
+                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
+                      <Button 
+                        type="submit" 
+                        className="flex-1 bg-gray-900 hover:bg-gray-800 text-white py-3 text-lg font-bold" 
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'Saving...' : (editingMeasurement ? 'Update Measurement' : 'Save Measurement')}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={handleCloseDialog}
+                        className="border-gray-300 text-gray-700 hover:bg-gray-50 px-6"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Filter - Responsive */}
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <div className="grid gap-4 grid-cols-1 lg:grid-cols-4">
+            <div className="lg:col-span-2">
+              <Label className="text-gray-700 font-medium mb-2 block">Search Measurements</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <Input
+                  placeholder="Search by customer name, mobile, or clothing type..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 border-gray-300 focus:border-gray-900 focus:ring-gray-900 text-base sm:text-lg py-3"
                 />
               </div>
-              
-              <div className="flex space-x-2">
-                <Button type="submit" className="flex-1" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving...' : 'Save Measurements'}
-                </Button>
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </div>
+            
+            <div>
+              <Label className="text-gray-700 font-medium mb-2 block">Filter by Type</Label>
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="border-gray-300 focus:border-gray-900 focus:ring-gray-900 py-3">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {Object.keys(clothingTypeFields).map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {getClothingTypeLabel(type)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      {/* Search */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by customer name, mobile, or clothing type..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+            <div>
+              <Label className="text-gray-700 font-medium mb-2 block">Card View</Label>
+              <Button
+                variant="outline"
+                onClick={toggleAllCards}
+                className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 py-3"
+              >
+                {expandedCards.size === filteredMeasurements.length ? (
+                  <>
+                    <EyeOff className="h-4 w-4 mr-2" />
+                    Collapse All
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4 mr-2" />
+                    Expand All
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Measurements List */}
-      <div className="grid gap-4">
-        {filteredMeasurements.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center py-8">
-                <Ruler className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium">No measurements found</h3>
-                <p className="text-muted-foreground">
-                  {measurements.length === 0 
-                    ? "Get started by recording your first measurement" 
-                    : "Try adjusting your search terms"
-                  }
-                </p>
+        {/* Statistics - Responsive Grid */}
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardContent className="p-3 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-xs sm:text-sm font-medium">Total Measurements</p>
+                  <p className="text-xl sm:text-3xl font-bold text-gray-900">{measurements.length}</p>
+                </div>
+                <Ruler className="h-6 w-6 sm:h-10 sm:w-10 text-gray-400" />
               </div>
             </CardContent>
           </Card>
-        ) : (
-          filteredMeasurements.map((measurement) => (
-            <Card key={measurement.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg flex items-center space-x-2">
-                      <User className="h-5 w-5 text-muted-foreground" />
-                      <span>{measurement.customers.name}</span>
-                    </CardTitle>
-                    <CardDescription>
-                      {measurement.clothing_type.replace('_', ' ').toUpperCase()} • 
-                      Recorded on {new Date(measurement.created_at).toLocaleDateString()}
-                    </CardDescription>
-                  </div>
+          
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardContent className="p-3 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-xs sm:text-sm font-medium">Unique Customers</p>
+                  <p className="text-xl sm:text-3xl font-bold text-gray-900">
+                    {new Set(measurements.map(m => m.customer_id)).size}
+                  </p>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                  {Object.entries(measurement.measurements).map(([key, value]) => (
-                    <div key={key} className="flex justify-between">
-                      <span className="text-muted-foreground capitalize">
-                        {key.replace('_', ' ')}:
-                      </span>
-                      <span className="font-medium">{String(value)}</span>
-                    </div>
-                  ))}
+                <User className="h-6 w-6 sm:h-10 sm:w-10 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardContent className="p-3 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-xs sm:text-sm font-medium">Clothing Types</p>
+                  <p className="text-xl sm:text-3xl font-bold text-gray-900">
+                    {new Set(measurements.map(m => m.clothing_type)).size}
+                  </p>
                 </div>
-                
-                {measurement.notes && (
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Notes:</strong> {measurement.notes}
-                    </p>
-                  </div>
-                )}
+                <Badge className="h-6 w-6 sm:h-10 sm:w-10 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardContent className="p-3 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-xs sm:text-sm font-medium">This Month</p>
+                  <p className="text-xl sm:text-3xl font-bold text-gray-900">
+                    {measurements.filter(m => 
+                      new Date(m.created_at).getMonth() === new Date().getMonth()
+                    ).length}
+                  </p>
+                </div>
+                <Calendar className="h-6 w-6 sm:h-10 sm:w-10 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Measurements List - Collapsible Cards */}
+        <div className="space-y-3 sm:space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-64 bg-white rounded-lg border">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+                <p className="text-gray-600 mt-4 text-lg">Loading measurements...</p>
+              </div>
+            </div>
+          ) : filteredMeasurements.length === 0 ? (
+            <Card className="bg-white border-gray-200 shadow-sm">
+              <CardContent className="pt-6">
+                <div className="text-center py-12">
+                  <Ruler className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No measurements found</h3>
+                  <p className="text-gray-600 text-lg">
+                    {measurements.length === 0 
+                      ? "Get started by recording your first measurement" 
+                      : "Try adjusting your search terms or filters"
+                    }
+                  </p>
+                </div>
               </CardContent>
             </Card>
-          ))
-        )}
+          ) : (
+            filteredMeasurements.map((measurement) => (
+              <Collapsible 
+                key={measurement.id}
+                open={expandedCards.has(measurement.id)}
+                onOpenChange={() => toggleCardExpansion(measurement.id)}
+              >
+                <Card className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+                  {/* Compact Header */}
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer border-b border-gray-100 bg-gray-50 p-3 sm:p-4">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-gray-900 rounded-lg">
+                            <User className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3">
+                              <h3 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
+                                {measurement.customers.name}
+                              </h3>
+                              <Badge className="bg-gray-900 text-white px-2 py-1 text-xs sm:text-sm w-fit">
+                                {getClothingTypeLabel(measurement.clothing_type)}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 mt-1 text-gray-600 text-xs sm:text-sm">
+                              <span className="flex items-center">
+                                <Phone className="h-3 w-3 mr-1" />
+                                {measurement.customers.mobile}
+                              </span>
+                              <span className="flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                {new Date(measurement.created_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          {expandedCards.has(measurement.id) ? (
+                            <ChevronUp className="h-5 w-5 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="h-5 w-5 text-gray-400" />
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  
+                  {/* Expandable Content */}
+                  <CollapsibleContent>
+                    <CardContent className="p-3 sm:p-6">
+                      {/* Action Buttons */}
+                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mb-6">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(measurement)}
+                          className="border-gray-300 text-gray-700 hover:bg-gray-50 flex-1 sm:flex-none"
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-red-300 text-red-600 hover:bg-red-50 flex-1 sm:flex-none"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-white border-gray-200 w-[95vw] max-w-md">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-gray-900">Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription className="text-gray-600">
+                                This action cannot be undone. This will permanently delete the measurement record.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                              <AlertDialogCancel className="border-gray-300 text-gray-700 hover:bg-gray-50 w-full sm:w-auto">
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleDelete(measurement.id)}
+                                className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+
+                      {/* Measurements Grid - Responsive */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                        {Object.entries(measurement.measurements).map(([key, value]) => (
+                          <div key={key} className="text-center p-3 sm:p-4 bg-gray-50 rounded-lg border">
+                            <p className="text-gray-600 text-xs sm:text-sm font-medium capitalize mb-1">
+                              {key.replace('_', ' ')}
+                            </p>
+                            <p className="text-lg sm:text-2xl font-bold text-gray-900">
+                              {String(value)}"
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {measurement.notes && (
+                        <div className="mt-6 pt-4 border-t border-gray-200">
+                          <div className="bg-gray-50 p-4 rounded-lg border">
+                            <h4 className="font-semibold text-gray-900 mb-2">Notes:</h4>
+                            <p className="text-gray-700 text-sm sm:text-base">{measurement.notes}</p>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
