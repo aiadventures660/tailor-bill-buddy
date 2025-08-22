@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Search, Phone, Mail, MapPin, Edit2 } from 'lucide-react';
 
 interface Customer {
@@ -19,6 +20,7 @@ interface Customer {
 }
 
 const Customers = () => {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,12 +169,18 @@ const Customers = () => {
             }
           }}
         >
-          <DialogTrigger asChild>
-            <Button>
+          <div className="flex space-x-2">
+            <Button onClick={() => navigate('/customers/new')} className="bg-cyan-500 hover:bg-cyan-600">
               <Plus className="mr-2 h-4 w-4" />
-              Add Customer
+              New Customer Account
             </Button>
-          </DialogTrigger>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Quick Add Customer
+              </Button>
+            </DialogTrigger>
+          </div>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>

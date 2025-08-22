@@ -52,6 +52,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const getNavigationItems = () => {
     const baseItems = [
       {
+        title: 'Dashboard',
+        icon: Home,
+        path: '/',
+        roles: ['admin', 'cashier', 'tailor'],
+      },
+      {
         title: 'Customers',
         icon: Users,
         path: '/customers',

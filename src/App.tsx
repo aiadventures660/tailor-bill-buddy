@@ -8,12 +8,14 @@ import DashboardLayout from "@/components/Layout/DashboardLayout";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
+import NewCustomer from "./pages/NewCustomer";
 import Measurements from "./pages/Measurements";
 import Orders from "./pages/Orders";
 import Billing from "./pages/Billing";
 import Inventory from "./pages/Inventory";
 import Payments from "./pages/Payments";
 import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -60,6 +62,7 @@ const AppRoutes = () => {
           <Customers />
         </ProtectedRoute>
       } />
+      <Route path="/customers/new" element={<NewCustomer />} />
       <Route path="/measurements" element={
         <ProtectedRoute>
           <Measurements />
@@ -92,10 +95,7 @@ const AppRoutes = () => {
       } />
       <Route path="/settings" element={
         <ProtectedRoute>
-          <div className="text-center py-8">
-            <h2 className="text-2xl font-bold">Settings</h2>
-            <p className="text-muted-foreground">Coming soon...</p>
-          </div>
+          <Settings />
         </ProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />
