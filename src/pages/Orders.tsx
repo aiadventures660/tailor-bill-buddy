@@ -316,7 +316,10 @@ const Orders = () => {
   };
 
   const updateOrder = async () => {
+    if (isSubmitting) return; // Prevent double submission
+    
     try {
+      setIsSubmitting(true);
       if (!selectedOrder) return;
       
       const updateData = {
@@ -352,6 +355,8 @@ const Orders = () => {
         description: 'Failed to update order',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1111,9 +1116,13 @@ const Orders = () => {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button onClick={updateOrder} className="w-full sm:w-auto">
+            <LoadingButton 
+              onClick={updateOrder} 
+              isLoading={isSubmitting}
+              className="w-full sm:w-auto"
+            >
               Update Order
-            </Button>
+            </LoadingButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

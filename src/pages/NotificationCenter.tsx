@@ -318,10 +318,10 @@ const NotificationCenter = () => {
                         WhatsApp
                       </div>
                     </SelectItem>
-                    <SelectItem value="email">
-                      <div className="flex items-center">
+                    <SelectItem value="email" disabled>
+                      <div className="flex items-center opacity-50">
                         <Mail className="w-4 h-4 mr-2" />
-                        Email
+                        Email (Coming Soon)
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -355,7 +355,7 @@ const NotificationCenter = () => {
                   disabled={loading || selectedCustomers.length === 0}
                 >
                   <Send className="w-4 h-4 mr-2" />
-                  Send to {selectedCustomers.length} customers
+                  {loading ? `Sending to ${selectedCustomers.length} customers...` : `Send to ${selectedCustomers.length} customers`}
                 </Button>
               </div>
             </CardContent>

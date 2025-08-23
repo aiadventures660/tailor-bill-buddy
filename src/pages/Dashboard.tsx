@@ -259,6 +259,9 @@ const Dashboard = () => {
       icon: Users,
       description: 'Registered customers',
       color: 'text-blue-600',
+  pulseClass: '',
+      bgGradient: 'bg-gradient-to-br from-blue-50 to-blue-100',
+      iconBg: 'bg-blue-100'
     },
     {
       title: 'Active Orders',
@@ -266,6 +269,9 @@ const Dashboard = () => {
       icon: ShoppingCart,
       description: `${dashboardData.todayDue} due today`,
       color: 'text-green-600',
+  pulseClass: '',
+      bgGradient: 'bg-gradient-to-br from-green-50 to-green-100',
+      iconBg: 'bg-green-100'
     },
     {
       title: 'Monthly Revenue',
@@ -273,6 +279,9 @@ const Dashboard = () => {
       icon: DollarSign,
       description: 'Current month earnings',
       color: 'text-purple-600',
+  pulseClass: '',
+      bgGradient: 'bg-gradient-to-br from-purple-50 to-purple-100',
+      iconBg: 'bg-purple-100'
     },
     {
       title: 'Pending Deliveries',
@@ -280,6 +289,9 @@ const Dashboard = () => {
       icon: Clock,
       description: `${dashboardData.overdueTasks} overdue`,
       color: dashboardData.overdueTasks > 0 ? 'text-red-600' : 'text-orange-600',
+  pulseClass: '',
+      bgGradient: dashboardData.overdueTasks > 0 ? 'bg-gradient-to-br from-red-50 to-red-100' : 'bg-gradient-to-br from-orange-50 to-orange-100',
+      iconBg: dashboardData.overdueTasks > 0 ? 'bg-red-100' : 'bg-orange-100'
     },
   ];
 
@@ -350,7 +362,7 @@ const Dashboard = () => {
               </p>
               <div className="flex items-center space-x-6 text-sm text-gray-500">
                 <span className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   <span>Real-time Data</span>
                 </span>
                 <span className="flex items-center space-x-1">
@@ -385,12 +397,12 @@ const Dashboard = () => {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {dashboardStats.map((stat, index) => (
-              <Card key={index} className="bg-white shadow-lg border-0 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm bg-white/90">
+              <Card key={index} className={`shadow-lg border-0 hover:shadow-xl transition-all duration-300 backdrop-blur-sm ${stat.bgGradient}`}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-700">
                     {stat.title}
                   </CardTitle>
-                  <div className={`p-2 rounded-lg bg-gray-100`}>
+                  <div className={`p-2 rounded-lg ${stat.iconBg}`}>
                     <stat.icon className={`h-5 w-5 ${stat.color}`} />
                   </div>
                 </CardHeader>
@@ -419,7 +431,7 @@ const Dashboard = () => {
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {quickActions.map((action, index) => (
-                <Card key={index} className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-white to-gray-50">
+                <Card key={index} className="cursor-pointer hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-white to-gray-50">
                   <CardHeader>
                     <div className="flex items-center space-x-3">
                       <div className={`p-3 rounded-xl ${action.color} text-white shadow-lg`}>
