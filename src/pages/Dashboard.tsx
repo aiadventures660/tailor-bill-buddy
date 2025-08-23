@@ -403,6 +403,142 @@ const Dashboard = () => {
           ))}
         </div>
 
+        {/* Real-time Order Status Overview */}
+        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
+              <div className="p-2 bg-orange-500 rounded-lg">
+                <Package className="h-5 w-5 text-white" />
+              </div>
+              <span>Order Status Overview</span>
+            </h2>
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-gray-500">Real-time Updates</span>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/order-status">
+                  <Eye className="h-4 w-4 mr-2" />
+                  View All
+                </Link>
+              </Button>
+            </div>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800">Pending Orders</p>
+                    <p className="text-2xl font-bold text-yellow-900">
+                      {loading ? '...' : recentOrders.filter(order => order.status === 'pending').length}
+                    </p>
+                  </div>
+                  <Clock className="h-8 w-8 text-yellow-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="text-xs bg-yellow-200 text-yellow-800 border-yellow-300">
+                    Awaiting approval
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">In Progress</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {loading ? '...' : recentOrders.filter(order => order.status === 'in_progress').length}
+                    </p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-blue-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="text-xs bg-blue-200 text-blue-800 border-blue-300">
+                    Active work
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-800">Ready for Delivery</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {loading ? '...' : recentOrders.filter(order => order.status === 'ready').length}
+                    </p>
+                  </div>
+                  <Package className="h-8 w-8 text-green-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="text-xs bg-green-200 text-green-800 border-green-300">
+                    Ready to ship
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-red-800">Overdue</p>
+                    <p className="text-2xl font-bold text-red-900">
+                      {loading ? '...' : dashboardData.overdueTasks}
+                    </p>
+                  </div>
+                  <Clock className="h-8 w-8 text-red-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="destructive" className="text-xs">
+                    Needs attention
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Orders Preview */}
+          {recentOrders.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Orders</h3>
+              <div className="space-y-3">
+                {recentOrders.slice(0, 5).map((order, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <div>
+                        <p className="font-medium text-gray-900">Order #{order.order_number || `ORD-${index + 1}`}</p>
+                        <p className="text-sm text-gray-600">{order.customer_name || 'Customer'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${
+                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                          order.status === 'in_progress' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                          order.status === 'ready' ? 'bg-green-100 text-green-800 border-green-300' :
+                          'bg-gray-100 text-gray-800 border-gray-300'
+                        }`}
+                      >
+                        {order.status?.replace('_', ' ') || 'pending'}
+                      </Badge>
+                      <span className="text-sm text-gray-500">
+                        {order.due_date ? new Date(order.due_date).toLocaleDateString() : 'No due date'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Quick Actions */}
         <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>

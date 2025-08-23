@@ -11,11 +11,13 @@ import Customers from "./pages/Customers";
 import NewCustomer from "./pages/NewCustomer";
 import Measurements from "./pages/Measurements";
 import Orders from "./pages/Orders";
+import OrderStatus from "./pages/OrderStatus";
 import Billing from "./pages/Billing";
 import Inventory from "./pages/Inventory";
 import Payments from "./pages/Payments";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import Notifications from "./pages/Notifications";
 import NotificationCenter from "./pages/NotificationCenter";
 import CustomerPortal from "./pages/CustomerPortal";
 import NotFound from "./pages/NotFound";
@@ -75,6 +77,11 @@ const AppRoutes = () => {
           <Orders />
         </ProtectedRoute>
       } />
+      <Route path="/order-status" element={
+        <ProtectedRoute>
+          <OrderStatus />
+        </ProtectedRoute>
+      } />
       <Route path="/billing" element={
         <ProtectedRoute>
           <Billing />
@@ -102,7 +109,7 @@ const AppRoutes = () => {
       } />
       <Route path="/notifications" element={
         <ProtectedRoute>
-          <NotificationCenter />
+          <Notifications />
         </ProtectedRoute>
       } />
       <Route path="/customer-portal" element={
