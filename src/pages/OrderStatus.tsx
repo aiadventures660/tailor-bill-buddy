@@ -8,6 +8,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
+import { 
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -55,6 +64,8 @@ const OrderStatus: React.FC = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12); // Number of orders per page
   const [editForm, setEditForm] = useState({
     order_number: '',
     customer_id: '',
@@ -90,6 +101,7 @@ const OrderStatus: React.FC = () => {
 
   useEffect(() => {
     filterOrders();
+    setCurrentPage(1); // Reset to first page when filters change
   }, [orders, statusFilter, searchTerm]);
 
   const fetchOrders = async () => {
@@ -318,6 +330,108 @@ const OrderStatus: React.FC = () => {
     setFilteredOrders(filtered);
   };
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // Previous button
+    items.push(
+      <PaginationItem key="prev">
+        <PaginationPrevious 
+          onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+        />
+      </PaginationItem>
+    );
+
+    // First page
+    if (startPage > 1) {
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink 
+            onClick={() => handlePageChange(1)}
+            isActive={currentPage === 1}
+            className="cursor-pointer"
+          >
+            1
+          </PaginationLink>
+        </PaginationItem>
+      );
+      if (startPage > 2) {
+        items.push(
+          <PaginationItem key="ellipsis1">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+    }
+
+    // Visible pages
+    for (let i = startPage; i <= endPage; i++) {
+      items.push(
+        <PaginationItem key={i}>
+          <PaginationLink 
+            onClick={() => handlePageChange(i)}
+            isActive={currentPage === i}
+            className="cursor-pointer"
+          >
+            {i}
+          </PaginationLink>
+        </PaginationItem>
+      );
+    }
+
+    // Last page
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        items.push(
+          <PaginationItem key="ellipsis2">
+            <PaginationEllipsis />
+          </PaginationItem>
+        );
+      }
+      items.push(
+        <PaginationItem key={totalPages}>
+          <PaginationLink 
+            onClick={() => handlePageChange(totalPages)}
+            isActive={currentPage === totalPages}
+            className="cursor-pointer"
+          >
+            {totalPages}
+          </PaginationLink>
+        </PaginationItem>
+      );
+    }
+
+    // Next button
+    items.push(
+      <PaginationItem key="next">
+        <PaginationNext 
+          onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
+          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+        />
+      </PaginationItem>
+    );
+
+    return items;
+  };
+
   const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
     try {
       const { error } = await supabase
@@ -532,14 +646,16 @@ const OrderStatus: React.FC = () => {
               </CardContent>
             </Card>
           ))
-        ) : filteredOrders.length === 0 ? (
+        ) : currentOrders.length === 0 ? (
           <div className="col-span-full text-center py-12">
-            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-600">No orders found</h3>
-            <p className="text-gray-500">Try adjusting your search or filter criteria</p>
+            <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+            <p className="text-gray-500">
+              {filteredOrders.length === 0 ? 'No orders match your current filters.' : 'No orders to display on this page.'}
+            </p>
           </div>
         ) : (
-          filteredOrders.map((order) => {
+          currentOrders.map((order) => {
             const StatusIcon = getStatusIcon(order.status);
             const daysUntilDue = getDaysUntilDue(order.due_date);
             const isOrderOverdue = isOverdue(order.due_date);
@@ -646,6 +762,20 @@ const OrderStatus: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {filteredOrders.length > itemsPerPage && (
+        <div className="flex flex-col items-center gap-4">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
+          </div>
+          <Pagination>
+            <PaginationContent>
+              {renderPaginationItems()}
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
 
       {/* View Order Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>

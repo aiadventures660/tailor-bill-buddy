@@ -377,6 +377,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         roles: ['admin', 'cashier'],
       },
       {
+        title: 'Payments',
+        icon: CreditCard,
+        path: '/payments',
+        roles: ['admin', 'cashier'],
+      },
+      {
         title: 'Reports',
         icon: BarChart3,
         path: '/reports',
@@ -479,20 +485,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                   {pendingApprovals > 0 && (
                     <Badge variant="destructive" className="h-5 w-5 p-0 text-xs">
                       {pendingApprovals}
-                    </Badge>
-                  )}
-                </Link>
-              </SidebarMenuButton>
-              
-              <SidebarMenuButton asChild className="w-full justify-between mb-2">
-                <Link to="/notifications" className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2">
-                    <Bell className="h-4 w-4" />
-                    Notifications
-                  </div>
-                  {unreadCount > 0 && (
-                    <Badge variant="destructive" className="h-5 w-5 p-0 text-xs">
-                      {unreadCount}
                     </Badge>
                   )}
                 </Link>

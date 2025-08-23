@@ -3,6 +3,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import DataSeeder from '@/components/DataSeeder';
+import PaymentSystemStatus from '@/components/PaymentSystemStatus';
 import { 
   Users, 
   Ruler, 
@@ -14,7 +16,14 @@ import {
   Clock,
   Eye,
   RefreshCw,
-  Calendar
+  Calendar,
+  AlertTriangle,
+  CreditCard,
+  Bell,
+  CheckCircle2,
+  XCircle,
+  Database,
+  Activity
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,16 +36,23 @@ const Dashboard = () => {
   // State for real-time data
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showDataSeeder, setShowDataSeeder] = useState(false);
+  const [showSystemStatus, setShowSystemStatus] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     totalCustomers: 0,
     activeOrders: 0,
     monthlyRevenue: 0,
     pendingDeliveries: 0,
     overdueTasks: 0,
-    todayDue: 0
+    todayDue: 0,
+    totalPayments: 0,
+    pendingPayments: 0,
+    overduePayments: 0
   });
   const [recentActivities, setRecentActivities] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
+  const [paymentAlerts, setPaymentAlerts] = useState([]);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -86,8 +102,11 @@ const Dashboard = () => {
         .from('orders')
         .select(`
           id, 
+          order_number,
           status, 
-          total_amount, 
+          total_amount,
+          advance_amount,
+          balance_amount,
           due_date, 
           created_at,
           customer_id
@@ -143,14 +162,104 @@ const Dashboard = () => {
         order.due_date === todayDate && order.status !== 'delivered'
       ).length || 0;
 
+      // Fetch payments data for detailed analysis
+      const { data: paymentsDetailed, error: paymentsDetailedError } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          amount,
+          payment_date,
+          created_at,
+          order_id,
+          orders!inner(
+            id,
+            order_number,
+            total_amount,
+            advance_amount,
+            balance_amount,
+            due_date,
+            customers(name, mobile)
+          )
+        `);
+
+      if (paymentsDetailedError) throw paymentsDetailedError;
+
+      // Calculate payment statistics
+      const totalPayments = paymentsDetailed?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+      
+      // Calculate pending payments (orders with balance amount > 0)
+      const ordersWithBalance = orders?.filter(order => 
+        (order.total_amount - (order.advance_amount || 0)) > 0 && order.status !== 'cancelled'
+      ) || [];
+      
+      const pendingPayments = ordersWithBalance.reduce((sum, order) => 
+        sum + (order.total_amount - (order.advance_amount || 0)), 0
+      );
+
+      // Calculate overdue payments (pending payments past due date)
+      const overduePayments = ordersWithBalance
+        .filter(order => order.due_date && order.due_date < todayDate)
+        .reduce((sum, order) => sum + (order.total_amount - (order.advance_amount || 0)), 0);
+
+      // Create payment alerts
+      const alerts = [];
+      ordersWithBalance.forEach(order => {
+        const balance = order.total_amount - (order.advance_amount || 0);
+        if (balance > 0) {
+          const customerName = customersData?.find(c => c.id === order.customer_id)?.name || 'Unknown';
+          
+          if (order.due_date && order.due_date < todayDate) {
+            alerts.push({
+              id: order.id,
+              type: 'overdue',
+              title: 'Payment Overdue',
+              message: `₹${balance.toLocaleString()} pending from ${customerName}`,
+              orderNumber: order.order_number || `Order ${order.id.slice(0, 8)}`,
+              amount: balance,
+              dueDate: order.due_date,
+              priority: 'high'
+            });
+          } else if (order.due_date && order.due_date <= new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) {
+            alerts.push({
+              id: order.id,
+              type: 'due_soon',
+              title: 'Payment Due Soon',
+              message: `₹${balance.toLocaleString()} due from ${customerName}`,
+              orderNumber: order.order_number || `Order ${order.id.slice(0, 8)}`,
+              amount: balance,
+              dueDate: order.due_date,
+              priority: 'medium'
+            });
+          }
+        }
+      });
+
+      // Get pending approvals (orders with status 'pending')
+      const pendingApprovalOrders = orders?.filter(order => order.status === 'pending').map(order => {
+        const customerName = customersData?.find(c => c.id === order.customer_id)?.name || 'Unknown';
+        return {
+          id: order.id,
+          orderNumber: order.order_number || `Order ${order.id.slice(0, 8)}`,
+          customerName,
+          amount: order.total_amount,
+          createdAt: order.created_at
+        };
+      }) || [];
+
       setDashboardData({
         totalCustomers,
         activeOrders,
         monthlyRevenue,
         pendingDeliveries,
         overdueTasks,
-        todayDue
+        todayDue,
+        totalPayments,
+        pendingPayments,
+        overduePayments
       });
+
+      setPaymentAlerts(alerts.slice(0, 5)); // Show top 5 alerts
+      setPendingApprovals(pendingApprovalOrders.slice(0, 5)); // Show top 5 pending approvals
 
       // Set recent orders for activity
       setRecentOrders(orders?.slice(0, 5) || []);
@@ -188,8 +297,8 @@ const Dashboard = () => {
       }
 
       // Recent payments
-      if (payments) {
-        payments.slice(0, 2).forEach(payment => {
+      if (paymentsDetailed) {
+        paymentsDetailed.slice(0, 2).forEach(payment => {
           activities.push({
             type: 'payment',
             title: 'Payment received',
@@ -273,6 +382,20 @@ const Dashboard = () => {
       icon: DollarSign,
       description: 'Current month earnings',
       color: 'text-purple-600',
+    },
+    {
+      title: 'Total Payments',
+      value: loading ? '...' : `₹${dashboardData.totalPayments.toLocaleString()}`,
+      icon: CreditCard,
+      description: 'All payments received',
+      color: 'text-emerald-600',
+    },
+    {
+      title: 'Pending Payments',
+      value: loading ? '...' : `₹${dashboardData.pendingPayments.toLocaleString()}`,
+      icon: Clock,
+      description: 'Awaiting payment',
+      color: dashboardData.overduePayments > 0 ? 'text-red-600' : 'text-orange-600',
     },
     {
       title: 'Pending Deliveries',
@@ -366,6 +489,26 @@ const Dashboard = () => {
             </div>
             
             <div className="flex space-x-3">
+              {profile?.role === 'admin' && (
+                <>
+                  <Button 
+                    onClick={() => setShowSystemStatus(!showSystemStatus)}
+                    variant="outline" 
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                  >
+                    <Activity className="mr-2 h-4 w-4" />
+                    {showSystemStatus ? 'Hide' : 'Show'} System Status
+                  </Button>
+                  <Button 
+                    onClick={() => setShowDataSeeder(!showDataSeeder)}
+                    variant="outline" 
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                  >
+                    <Database className="mr-2 h-4 w-4" />
+                    {showDataSeeder ? 'Hide' : 'Show'} Data Seeder
+                  </Button>
+                </>
+              )}
               <Button 
                 onClick={handleRefresh}
                 variant="outline" 
@@ -378,6 +521,20 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* System Status Component (for development/testing) */}
+        {showSystemStatus && profile?.role === 'admin' && (
+          <div className="mb-6">
+            <PaymentSystemStatus />
+          </div>
+        )}
+
+        {/* Data Seeder Component (for development/testing) */}
+        {showDataSeeder && profile?.role === 'admin' && (
+          <div className="mb-6">
+            <DataSeeder />
+          </div>
+        )}
 
         {/* Stats Overview */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -538,6 +695,108 @@ const Dashboard = () => {
             </div>
           )}
         </div>
+
+        {/* Payment Alerts Section */}
+        {paymentAlerts.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
+                <div className="p-2 bg-red-500 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-white" />
+                </div>
+                <span>Payment Alerts</span>
+              </h2>
+              <Badge variant="destructive" className="animate-pulse">
+                {paymentAlerts.length} Alert{paymentAlerts.length > 1 ? 's' : ''}
+              </Badge>
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {paymentAlerts.map((alert) => (
+                <Card key={alert.id} className={`border-l-4 ${
+                  alert.priority === 'high' ? 'border-l-red-500 bg-red-50' : 
+                  alert.priority === 'medium' ? 'border-l-yellow-500 bg-yellow-50' : 
+                  'border-l-blue-500 bg-blue-50'
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        {alert.type === 'overdue' ? (
+                          <XCircle className="h-4 w-4 text-red-600" />
+                        ) : (
+                          <Clock className="h-4 w-4 text-yellow-600" />
+                        )}
+                        <Badge variant={alert.priority === 'high' ? 'destructive' : 'secondary'} className="text-xs">
+                          {alert.type === 'overdue' ? 'OVERDUE' : 'DUE SOON'}
+                        </Badge>
+                      </div>
+                      <span className="text-sm font-bold text-gray-900">
+                        ₹{alert.amount.toLocaleString()}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-1">{alert.orderNumber}</h3>
+                    <p className="text-sm text-gray-600 mb-2">{alert.message}</p>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Due: {new Date(alert.dueDate).toLocaleDateString()}</span>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link to="/payments">View Payment</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Admin Approval Section */}
+        {(profile?.role === 'admin' || profile?.role === 'cashier') && pendingApprovals.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
+                <div className="p-2 bg-blue-500 rounded-lg">
+                  <Bell className="h-5 w-5 text-white" />
+                </div>
+                <span>Pending Approvals</span>
+              </h2>
+              <Badge variant="secondary" className="animate-pulse">
+                {pendingApprovals.length} Pending
+              </Badge>
+            </div>
+            
+            <div className="space-y-3">
+              {pendingApprovals.map((approval) => (
+                <Card key={approval.id} className="border-l-4 border-l-blue-500 bg-blue-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                          <h3 className="font-semibold text-gray-900">{approval.orderNumber}</h3>
+                          <Badge variant="outline" className="text-xs">
+                            ₹{approval.amount.toLocaleString()}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-1">Customer: {approval.customerName}</p>
+                        <p className="text-xs text-gray-500">
+                          Created: {formatTimeAgo(approval.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button size="sm" variant="outline" asChild>
+                          <Link to="/order-status">
+                            <Eye className="h-3 w-3 mr-1" />
+                            Review
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
