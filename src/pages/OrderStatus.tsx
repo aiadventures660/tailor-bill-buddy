@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   Clock, 
   TrendingUp, 
@@ -22,7 +23,8 @@ import {
   Search,
   Calendar,
   Package,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
 
 interface Order {
@@ -34,7 +36,6 @@ interface Order {
   total_amount: number;
   created_at: string;
   updated_at?: string;
-  description?: string;
   customers: {
     name: string;
     mobile: string;
@@ -43,6 +44,7 @@ interface Order {
 }
 
 const OrderStatus: React.FC = () => {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,6 +53,15 @@ const OrderStatus: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [editForm, setEditForm] = useState({
+    order_number: '',
+    customer_id: '',
+    status: 'pending' as Order['status'],
+    due_date: '',
+    total_amount: 0,
+  });
   const [orderStats, setOrderStats] = useState({
     total: 0,
     pending: 0,
@@ -62,6 +73,7 @@ const OrderStatus: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
+    fetchCustomers();
     
     // Set up real-time subscription
     const subscription = supabase
@@ -94,7 +106,6 @@ const OrderStatus: React.FC = () => {
           total_amount,
           created_at,
           updated_at,
-          description,
           customers(name, mobile, address)
         `)
         .order('created_at', { ascending: false });
@@ -126,6 +137,158 @@ const OrderStatus: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id, name, mobile, address')
+        .order('name');
+
+      if (error) throw error;
+      setCustomers(data || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    }
+  };
+
+  const createOrder = async () => {
+    try {
+      if (!editForm.order_number || !editForm.customer_id || !editForm.total_amount || !user?.id) {
+        toast({
+          title: 'Error',
+          description: 'Please fill in all required fields',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .insert({
+          order_number: editForm.order_number,
+          customer_id: editForm.customer_id,
+          created_by: user.id,
+          status: editForm.status,
+          due_date: editForm.due_date || null,
+          total_amount: editForm.total_amount,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Order created successfully',
+      });
+
+      setIsCreateDialogOpen(false);
+      resetForm();
+      fetchOrders();
+    } catch (error) {
+      console.error('Error creating order:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create order',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const updateOrder = async () => {
+    try {
+      if (!selectedOrder || !editForm.order_number || !editForm.customer_id || !editForm.total_amount) {
+        toast({
+          title: 'Error',
+          description: 'Please fill in all required fields',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          order_number: editForm.order_number,
+          customer_id: editForm.customer_id,
+          status: editForm.status,
+          due_date: editForm.due_date || null,
+          total_amount: editForm.total_amount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedOrder.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Order updated successfully',
+      });
+
+      setIsEditDialogOpen(false);
+      resetForm();
+      fetchOrders();
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update order',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteOrder = async (orderId: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Order deleted successfully',
+      });
+
+      fetchOrders();
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete order',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setEditForm({
+      order_number: '',
+      customer_id: '',
+      status: 'pending',
+      due_date: '',
+      total_amount: 0,
+    });
+    setSelectedOrder(null);
+  };
+
+  const openEditDialog = (order: Order) => {
+    setSelectedOrder(order);
+    setEditForm({
+      order_number: order.order_number,
+      customer_id: order.customer_id,
+      status: order.status,
+      due_date: order.due_date || '',
+      total_amount: order.total_amount,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const openCreateDialog = () => {
+    resetForm();
+    setIsCreateDialogOpen(true);
   };
 
   const filterOrders = () => {
@@ -240,10 +403,16 @@ const OrderStatus: React.FC = () => {
           <h1 className="text-3xl font-bold">Order Status Management</h1>
           <p className="text-gray-600">Monitor and manage all order statuses in real-time</p>
         </div>
-        <Button onClick={fetchOrders} disabled={loading} className="flex items-center gap-2">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={openCreateDialog} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Create Order
+          </Button>
+          <Button onClick={fetchOrders} disabled={loading} variant="outline" className="flex items-center gap-2">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -454,13 +623,21 @@ const OrderStatus: React.FC = () => {
                       variant="outline"
                       size="sm"
                       className="flex-1"
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setIsEditDialogOpen(true);
-                      }}
+                      onClick={() => openEditDialog(order)}
                     >
                       <Edit className="h-3 w-3 mr-1" />
                       Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to delete this order?')) {
+                          deleteOrder(order.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 </CardContent>
@@ -511,14 +688,208 @@ const OrderStatus: React.FC = () => {
                   </p>
                 </div>
               </div>
-              {selectedOrder.description && (
-                <div>
-                  <Label className="text-gray-600">Description</Label>
-                  <p className="text-sm mt-1">{selectedOrder.description}</p>
-                </div>
-              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Order Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Order</DialogTitle>
+            <DialogDescription>
+              Fill in the details to create a new order
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="order_number">Order Number *</Label>
+              <Input
+                id="order_number"
+                value={editForm.order_number}
+                onChange={(e) => setEditForm(prev => ({ ...prev, order_number: e.target.value }))}
+                placeholder="Enter order number"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="customer">Customer *</Label>
+              <Select 
+                value={editForm.customer_id} 
+                onValueChange={(value) => setEditForm(prev => ({ ...prev, customer_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name} - {customer.mobile}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="status">Status</Label>
+              <Select 
+                value={editForm.status} 
+                onValueChange={(value) => setEditForm(prev => ({ ...prev, status: value as Order['status'] }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="ready">Ready</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="due_date">Due Date</Label>
+              <Input
+                id="due_date"
+                type="date"
+                value={editForm.due_date}
+                onChange={(e) => setEditForm(prev => ({ ...prev, due_date: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="total_amount">Total Amount *</Label>
+              <Input
+                id="total_amount"
+                type="number"
+                value={editForm.total_amount}
+                onChange={(e) => setEditForm(prev => ({ ...prev, total_amount: parseFloat(e.target.value) || 0 }))}
+                placeholder="Enter total amount"
+                min="0"
+                step="0.01"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={createOrder} className="flex-1">
+                Create Order
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsCreateDialogOpen(false);
+                  resetForm();
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Order Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Order</DialogTitle>
+            <DialogDescription>
+              Update the order details
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit_order_number">Order Number *</Label>
+              <Input
+                id="edit_order_number"
+                value={editForm.order_number}
+                onChange={(e) => setEditForm(prev => ({ ...prev, order_number: e.target.value }))}
+                placeholder="Enter order number"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="edit_customer">Customer *</Label>
+              <Select 
+                value={editForm.customer_id} 
+                onValueChange={(value) => setEditForm(prev => ({ ...prev, customer_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name} - {customer.mobile}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="edit_status">Status</Label>
+              <Select 
+                value={editForm.status} 
+                onValueChange={(value) => setEditForm(prev => ({ ...prev, status: value as Order['status'] }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="ready">Ready</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="edit_due_date">Due Date</Label>
+              <Input
+                id="edit_due_date"
+                type="date"
+                value={editForm.due_date}
+                onChange={(e) => setEditForm(prev => ({ ...prev, due_date: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit_total_amount">Total Amount *</Label>
+              <Input
+                id="edit_total_amount"
+                type="number"
+                value={editForm.total_amount}
+                onChange={(e) => setEditForm(prev => ({ ...prev, total_amount: parseFloat(e.target.value) || 0 }))}
+                placeholder="Enter total amount"
+                min="0"
+                step="0.01"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={updateOrder} className="flex-1">
+                Update Order
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsEditDialogOpen(false);
+                  resetForm();
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
