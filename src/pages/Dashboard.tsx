@@ -3,8 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import DataSeeder from '@/components/DataSeeder';
-import PaymentSystemStatus from '@/components/PaymentSystemStatus';
 import { 
   Users, 
   Ruler, 
@@ -19,11 +17,8 @@ import {
   Calendar,
   AlertTriangle,
   CreditCard,
-  Bell,
   CheckCircle2,
-  XCircle,
-  Database,
-  Activity
+  XCircle
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,8 +31,6 @@ const Dashboard = () => {
   // State for real-time data
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showDataSeeder, setShowDataSeeder] = useState(false);
-  const [showSystemStatus, setShowSystemStatus] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     totalCustomers: 0,
     activeOrders: 0,
@@ -52,7 +45,6 @@ const Dashboard = () => {
   const [recentActivities, setRecentActivities] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [paymentAlerts, setPaymentAlerts] = useState([]);
-  const [pendingApprovals, setPendingApprovals] = useState([]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -234,18 +226,6 @@ const Dashboard = () => {
         }
       });
 
-      // Get pending approvals (orders with status 'pending')
-      const pendingApprovalOrders = orders?.filter(order => order.status === 'pending').map(order => {
-        const customerName = customersData?.find(c => c.id === order.customer_id)?.name || 'Unknown';
-        return {
-          id: order.id,
-          orderNumber: order.order_number || `Order ${order.id.slice(0, 8)}`,
-          customerName,
-          amount: order.total_amount,
-          createdAt: order.created_at
-        };
-      }) || [];
-
       setDashboardData({
         totalCustomers,
         activeOrders,
@@ -259,7 +239,6 @@ const Dashboard = () => {
       });
 
       setPaymentAlerts(alerts.slice(0, 5)); // Show top 5 alerts
-      setPendingApprovals(pendingApprovalOrders.slice(0, 5)); // Show top 5 pending approvals
 
       // Set recent orders for activity
       setRecentOrders(orders?.slice(0, 5) || []);
@@ -489,26 +468,6 @@ const Dashboard = () => {
             </div>
             
             <div className="flex space-x-3">
-              {profile?.role === 'admin' && (
-                <>
-                  <Button 
-                    onClick={() => setShowSystemStatus(!showSystemStatus)}
-                    variant="outline" 
-                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
-                  >
-                    <Activity className="mr-2 h-4 w-4" />
-                    {showSystemStatus ? 'Hide' : 'Show'} System Status
-                  </Button>
-                  <Button 
-                    onClick={() => setShowDataSeeder(!showDataSeeder)}
-                    variant="outline" 
-                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                  >
-                    <Database className="mr-2 h-4 w-4" />
-                    {showDataSeeder ? 'Hide' : 'Show'} Data Seeder
-                  </Button>
-                </>
-              )}
               <Button 
                 onClick={handleRefresh}
                 variant="outline" 
@@ -521,20 +480,6 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-
-        {/* System Status Component (for development/testing) */}
-        {showSystemStatus && profile?.role === 'admin' && (
-          <div className="mb-6">
-            <PaymentSystemStatus />
-          </div>
-        )}
-
-        {/* Data Seeder Component (for development/testing) */}
-        {showDataSeeder && profile?.role === 'admin' && (
-          <div className="mb-6">
-            <DataSeeder />
-          </div>
-        )}
 
         {/* Stats Overview */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -558,6 +503,37 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {quickActions.map((action, index) => (
+              <Card key={index} className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-white to-gray-50">
+                <CardHeader>
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-3 rounded-xl ${action.color} text-white shadow-lg`}>
+                      <action.icon className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg text-gray-900">{action.title}</CardTitle>
+                      <CardDescription className="text-gray-600">
+                        {action.description}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Button asChild variant="outline" className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400">
+                    <Link to={action.path}>
+                      Get Started
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
 
         {/* Real-time Order Status Overview */}
@@ -748,86 +724,6 @@ const Dashboard = () => {
             </div>
           </div>
         )}
-
-        {/* Admin Approval Section */}
-        {(profile?.role === 'admin' || profile?.role === 'cashier') && pendingApprovals.length > 0 && (
-          <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
-                <div className="p-2 bg-blue-500 rounded-lg">
-                  <Bell className="h-5 w-5 text-white" />
-                </div>
-                <span>Pending Approvals</span>
-              </h2>
-              <Badge variant="secondary" className="animate-pulse">
-                {pendingApprovals.length} Pending
-              </Badge>
-            </div>
-            
-            <div className="space-y-3">
-              {pendingApprovals.map((approval) => (
-                <Card key={approval.id} className="border-l-4 border-l-blue-500 bg-blue-50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                          <h3 className="font-semibold text-gray-900">{approval.orderNumber}</h3>
-                          <Badge variant="outline" className="text-xs">
-                            ₹{approval.amount.toLocaleString()}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-1">Customer: {approval.customerName}</p>
-                        <p className="text-xs text-gray-500">
-                          Created: {formatTimeAgo(approval.createdAt)}
-                        </p>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Button size="sm" variant="outline" asChild>
-                          <Link to="/order-status">
-                            <Eye className="h-3 w-3 mr-1" />
-                            Review
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {quickActions.map((action, index) => (
-              <Card key={index} className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-white to-gray-50">
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-3 rounded-xl ${action.color} text-white shadow-lg`}>
-                      <action.icon className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg text-gray-900">{action.title}</CardTitle>
-                      <CardDescription className="text-gray-600">
-                        {action.description}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <Button asChild variant="outline" className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400">
-                    <Link to={action.path}>
-                      Get Started
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
 
         {/* Recent Activity */}
         <Card className="bg-white shadow-lg border-0 backdrop-blur-sm bg-white/90">
