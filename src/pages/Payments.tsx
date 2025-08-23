@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { LoadingCard, LoadingTable, LoadingStats, LoadingButton } from '@/components/ui/loading';
 import { 
   CreditCard, 
   Plus, 
@@ -85,11 +86,13 @@ const Payments = () => {
   const { profile } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [outstandingOrders, setOutstandingOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [methodFilter, setMethodFilter] = useState('all');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     amount: 0,
     payment_method: 'cash' as 'cash' | 'upi' | 'card' | 'credit',
@@ -102,6 +105,8 @@ const Payments = () => {
   }, []);
 
   const fetchPayments = async () => {
+    setLoading(true);
+    setIsStatsLoading(true);
     try {
       const { data, error } = await supabase
         .from('payments')
@@ -127,6 +132,9 @@ const Payments = () => {
         description: 'Failed to fetch payments',
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
+      setIsStatsLoading(false);
     }
   };
 
@@ -146,8 +154,6 @@ const Payments = () => {
       setOutstandingOrders(data || []);
     } catch (error: any) {
       console.error('Error fetching outstanding orders:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -253,14 +259,6 @@ const Payments = () => {
   const formatCurrency = (amount: number) => {
     return `₹${amount.toLocaleString('en-IN')}`;
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -394,52 +392,55 @@ const Payments = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalPayments)}</div>
-            <p className="text-xs text-muted-foreground">
-              All time payments
-            </p>
-          </CardContent>
-        </Card>
+      {isStatsLoading ? (
+        <LoadingStats count={4} className="mb-6" />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
+              <Receipt className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(totalPayments)}</div>
+              <p className="text-xs text-muted-foreground">
+                All time payments
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{formatCurrency(totalOutstanding)}</div>
-            <p className="text-xs text-muted-foreground">
-              Pending collections
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{formatCurrency(totalOutstanding)}</div>
+              <p className="text-xs text-muted-foreground">
+                Pending collections
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Orders Due</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{outstandingOrders.length}</div>
-            <p className="text-xs text-muted-foreground">
-              With pending balance
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Orders Due</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{outstandingOrders.length}</div>
+              <p className="text-xs text-muted-foreground">
+                With pending balance
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Payment Count</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Payment Count</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
             <div className="text-2xl font-bold">{payments.length}</div>
             <p className="text-xs text-muted-foreground">
               Total transactions
@@ -447,6 +448,7 @@ const Payments = () => {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Outstanding Orders Alert */}
       {outstandingOrders.length > 0 && (

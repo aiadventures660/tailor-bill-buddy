@@ -488,7 +488,7 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
             disabled={loading}
             className="bg-gray-900 hover:bg-gray-800 text-white px-8 py-3 font-bold"
           >
-            {loading ? 'Saving...' : 'Save Measurements'}
+            Save Measurements
           </Button>
           
           <Button

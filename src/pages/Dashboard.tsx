@@ -19,14 +19,15 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { LoadingSpinner, LoadingCard, LoadingStats } from '@/components/ui/loading';
 
 const Dashboard = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   
-  // State for real-time data
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     totalCustomers: 0,
     activeOrders: 0,
@@ -72,8 +73,7 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
-      
+      setIsLoading(true);
       // Fetch total customers
       const { data: customers, error: customersError } = await supabase
         .from('customers')
@@ -213,13 +213,13 @@ const Dashboard = () => {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   const handleRefresh = async () => {
-    setRefreshing(true);
+    setIsRefreshing(true);
     await fetchDashboardData();
   };
 
@@ -255,28 +255,28 @@ const Dashboard = () => {
   const getDashboardStats = () => [
     {
       title: 'Total Customers',
-      value: loading ? '...' : dashboardData.totalCustomers.toString(),
+      value: dashboardData.totalCustomers.toString(),
       icon: Users,
       description: 'Registered customers',
       color: 'text-blue-600',
     },
     {
       title: 'Active Orders',
-      value: loading ? '...' : dashboardData.activeOrders.toString(),
+      value: dashboardData.activeOrders.toString(),
       icon: ShoppingCart,
       description: `${dashboardData.todayDue} due today`,
       color: 'text-green-600',
     },
     {
       title: 'Monthly Revenue',
-      value: loading ? '...' : `₹${dashboardData.monthlyRevenue.toLocaleString()}`,
+      value: `₹${dashboardData.monthlyRevenue.toLocaleString()}`,
       icon: DollarSign,
       description: 'Current month earnings',
       color: 'text-purple-600',
     },
     {
       title: 'Pending Deliveries',
-      value: loading ? '...' : dashboardData.pendingDeliveries.toString(),
+      value: dashboardData.pendingDeliveries.toString(),
       icon: Clock,
       description: `${dashboardData.overdueTasks} overdue`,
       color: dashboardData.overdueTasks > 0 ? 'text-red-600' : 'text-orange-600',
@@ -345,7 +345,7 @@ const Dashboard = () => {
                 <span>Welcome back, {profile?.full_name || 'User'}!</span>
               </h1>
               <p className="text-gray-600 text-lg">
-                You're logged in as {profile?.role ? getRoleDisplayName(profile.role) : 'Loading...'}. 
+                You're logged in as {profile?.role ? getRoleDisplayName(profile.role) : 'User'}. 
                 Here's what's happening in your tailoring business today.
               </p>
               <div className="flex items-center space-x-6 text-sm text-gray-500">
@@ -369,69 +369,81 @@ const Dashboard = () => {
               <Button 
                 onClick={handleRefresh}
                 variant="outline" 
-                disabled={refreshing}
+                disabled={isRefreshing}
                 className="border-gray-300 text-gray-700 hover:bg-gray-50"
               >
-                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing ? 'Refreshing...' : 'Refresh Data'}
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
               </Button>
             </div>
           </div>
         </div>
 
         {/* Stats Overview */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {dashboardStats.map((stat, index) => (
-            <Card key={index} className="bg-white shadow-lg border-0 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm bg-white/90">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-700">
-                  {stat.title}
-                </CardTitle>
-                <div className={`p-2 rounded-lg bg-gray-100`}>
-                  <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold ${loading ? 'animate-pulse text-gray-400' : 'text-gray-900'}`}>
-                  {stat.value}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {stat.description}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {quickActions.map((action, index) => (
-              <Card key={index} className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-white to-gray-50">
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-3 rounded-xl ${action.color} text-white shadow-lg`}>
-                      <action.icon className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg text-gray-900">{action.title}</CardTitle>
-                      <CardDescription className="text-gray-600">
-                        {action.description}
-                      </CardDescription>
-                    </div>
+        {isLoading ? (
+          <LoadingStats count={4} className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" />
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {dashboardStats.map((stat, index) => (
+              <Card key={index} className="bg-white shadow-lg border-0 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 backdrop-blur-sm bg-white/90">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-700">
+                    {stat.title}
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg bg-gray-100`}>
+                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
                   </div>
                 </CardHeader>
-                <CardContent className="pt-0">
-                  <Button asChild variant="outline" className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400">
-                    <Link to={action.path}>
-                      Get Started
-                    </Link>
-                  </Button>
+                <CardContent>
+                  <div className="text-3xl font-bold text-gray-900">
+                    {stat.value}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {stat.description}
+                  </p>
                 </CardContent>
               </Card>
             ))}
           </div>
+        )}
+
+        {/* Quick Actions */}
+        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+          {isLoading ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <LoadingCard key={i} className="h-32" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {quickActions.map((action, index) => (
+                <Card key={index} className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-white to-gray-50">
+                  <CardHeader>
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-3 rounded-xl ${action.color} text-white shadow-lg`}>
+                        <action.icon className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg text-gray-900">{action.title}</CardTitle>
+                        <CardDescription className="text-gray-600">
+                          {action.description}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <Button asChild variant="outline" className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400">
+                      <Link to={action.path}>
+                        Get Started
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Recent Activity */}
@@ -450,15 +462,16 @@ const Dashboard = () => {
             </div>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {isLoading ? (
               <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="flex items-center space-x-4">
-                    <div className="bg-gray-200 p-3 rounded-full animate-pulse w-12 h-12"></div>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center space-x-4 p-3 rounded-lg animate-pulse">
+                    <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
                     <div className="flex-1 space-y-2">
-                      <div className="bg-gray-200 h-4 rounded animate-pulse w-3/4"></div>
-                      <div className="bg-gray-200 h-3 rounded animate-pulse w-1/2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
                     </div>
+                    <div className="h-3 w-16 bg-gray-200 rounded"></div>
                   </div>
                 ))}
               </div>

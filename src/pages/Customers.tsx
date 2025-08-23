@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { LoadingSpinner, LoadingStats, LoadingTable, LoadingPage, LoadingButton } from '@/components/ui/loading';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +33,6 @@ interface CustomerStats {
 const Customers = () => {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -42,6 +42,10 @@ const Customers = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filterType, setFilterType] = useState<string>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
   
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,6 +65,9 @@ const Customers = () => {
 
   const fetchCustomers = async () => {
     try {
+      setIsLoading(true);
+      setIsStatsLoading(true);
+      
       const { data, error } = await supabase
         .from('customers')
         .select('*')
@@ -89,7 +96,8 @@ const Customers = () => {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
+      setIsStatsLoading(false);
     }
   };
 
@@ -145,6 +153,7 @@ const Customers = () => {
         toast({
           title: 'Success',
           description: 'Customer updated successfully',
+          variant: 'success',
         });
       } else {
         // Add new customer
@@ -157,6 +166,7 @@ const Customers = () => {
         toast({
           title: 'Success',
           description: 'Customer added successfully',
+          variant: 'success',
         });
       }
 
@@ -179,6 +189,38 @@ const Customers = () => {
 
   const handleDelete = async (customer: Customer) => {
     try {
+      // Check for associated orders
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('customer_id', customer.id);
+
+      if (ordersError) throw ordersError;
+
+      // Check for associated measurements
+      const { data: measurements, error: measurementsError } = await supabase
+        .from('measurements')
+        .select('id')
+        .eq('customer_id', customer.id);
+
+      if (measurementsError) throw measurementsError;
+
+      const totalAssociations = (orders?.length || 0) + (measurements?.length || 0);
+
+      if (totalAssociations > 0) {
+        const associations = [];
+        if (orders?.length) associations.push(`${orders.length} order(s)`);
+        if (measurements?.length) associations.push(`${measurements.length} measurement(s)`);
+
+        toast({
+          title: 'Cannot Delete Customer',
+          description: `This customer has ${associations.join(' and ')}. Please delete these records first before deleting the customer.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // If no associations, proceed with deletion
       const { error } = await supabase
         .from('customers')
         .delete()
@@ -189,16 +231,27 @@ const Customers = () => {
       toast({
         title: 'Success',
         description: 'Customer deleted successfully',
+        variant: 'success',
       });
 
       fetchCustomers();
     } catch (error: any) {
       console.error('Error deleting customer:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete customer',
-        variant: 'destructive',
-      });
+      
+      // Handle specific database constraint errors
+      if (error.code === '23503') {
+        toast({
+          title: 'Cannot Delete Customer',
+          description: 'This customer has associated records. Please remove those first.',
+          variant: 'warning',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to delete customer',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -310,17 +363,6 @@ const Customers = () => {
     
     return pages;
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-gray-900 mx-auto"></div>
-          <p className="text-gray-600 text-lg font-medium">Loading customers...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
@@ -469,10 +511,39 @@ const Customers = () => {
           ) : (
             <>
               {/* Customer Grid/List */}
-              <div className={viewMode === 'grid' 
-                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
-                : "space-y-4"
-              }>
+              {isLoading ? (
+                viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="bg-white rounded-xl shadow-lg border p-6 space-y-4">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                            <div className="space-y-2">
+                              <div className="h-4 bg-gray-200 rounded w-24"></div>
+                              <div className="h-3 bg-gray-200 rounded w-32"></div>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="h-3 bg-gray-200 rounded w-full"></div>
+                            <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                          </div>
+                          <div className="flex justify-between">
+                            <div className="h-6 bg-gray-200 rounded w-16"></div>
+                            <div className="h-8 w-20 bg-gray-200 rounded"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <LoadingTable rows={6} columns={4} />
+                )
+              ) : (
+                <div className={viewMode === 'grid' 
+                  ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
+                  : "space-y-4"
+                }>
                 {currentCustomers.map((customer, index) => {
                 const stats = customerStats[customer.id] || { totalOrders: 0, totalSpent: 0 };
                 const customerType = getCustomerTypeLabel(stats);
@@ -546,7 +617,7 @@ const Customers = () => {
                                     <AlertDialogHeader>
                                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        This action cannot be undone. This will permanently delete {customer.name}'s record and all associated data.
+                                        This action cannot be undone. This will permanently delete {customer.name}'s record. Note: Customers with existing orders cannot be deleted until those orders are removed first.
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -654,7 +725,7 @@ const Customers = () => {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Delete Customer</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Are you sure you want to delete {customer.name}? This action cannot be undone.
+                                      Are you sure you want to delete {customer.name}? This action cannot be undone. Note: Customers with existing orders cannot be deleted until those orders are removed first.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
@@ -677,6 +748,7 @@ const Customers = () => {
                 );
               })}
               </div>
+              )}
 
               {/* Pagination */}
               {totalPages > 1 && (
@@ -827,14 +899,15 @@ const Customers = () => {
               </div>
               
               <div className="flex space-x-3 pt-4 border-t border-gray-200">
-                <Button 
+                <LoadingButton 
                   type="submit" 
-                  className="flex-1 bg-gray-900 hover:bg-gray-800 text-white"
+                  className="flex-1 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md"
+                  isLoading={isSubmitting}
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? 'Saving...' : (editingCustomer ? 'Update Customer' : 'Add Customer')}
-                </Button>
-                <Button type="button" variant="outline" onClick={handleCloseDialog} className="border-gray-300 text-gray-700 hover:bg-gray-50">
+                  {editingCustomer ? 'Update Customer' : 'Add Customer'}
+                </LoadingButton>
+                <Button type="button" variant="outline" onClick={handleCloseDialog} className="border-gray-300 text-gray-700 hover:bg-gray-50" disabled={isSubmitting}>
                   Cancel
                 </Button>
               </div>

@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { LoadingCard, LoadingTable, LoadingStats, LoadingButton } from '@/components/ui/loading';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -52,12 +53,13 @@ interface ReportData {
 const Reports = () => {
   const { profile } = useAuth();
   const [reportData, setReportData] = useState<ReportData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
   const [reportType, setReportType] = useState('overview');
+  const [loading, setLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
 
   useEffect(() => {
     fetchReportData();
@@ -65,6 +67,7 @@ const Reports = () => {
 
   const fetchReportData = async () => {
     setLoading(true);
+    setIsStatsLoading(true);
     try {
       // Fetch orders with related data
       const { data: ordersData, error: ordersError } = await supabase
@@ -209,6 +212,7 @@ const Reports = () => {
       console.error('Error fetching report data:', error);
     } finally {
       setLoading(false);
+      setIsStatsLoading(false);
     }
   };
 
@@ -259,14 +263,6 @@ const Reports = () => {
     a.click();
     document.body.removeChild(a);
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -342,59 +338,63 @@ const Reports = () => {
       {reportData && (
         <>
           {/* Overview Stats */}
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-                <IndianRupee className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(reportData.totalSales)}</div>
-                <p className="text-xs text-muted-foreground">
-                  Period revenue
-                </p>
-              </CardContent>
-            </Card>
+          {isStatsLoading ? (
+            <LoadingStats count={4} className="mb-6" />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                  <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(reportData.totalSales)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Period revenue
+                  </p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{reportData.totalOrders}</div>
-                <p className="text-xs text-muted-foreground">
-                  Orders processed
-                </p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{reportData.totalOrders}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Orders processed
+                  </p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg Order Value</CardTitle>
-                <Receipt className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(reportData.averageOrderValue)}</div>
-                <p className="text-xs text-muted-foreground">
-                  Per order average
-                </p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Avg Order Value</CardTitle>
+                  <Receipt className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(reportData.averageOrderValue)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Per order average
+                  </p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Customers</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{reportData.totalCustomers}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total registered
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Customers</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{reportData.totalCustomers}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Total registered
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Sales Breakdown */}
           <div className="grid gap-4 md:grid-cols-2">

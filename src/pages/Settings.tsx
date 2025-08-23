@@ -616,7 +616,7 @@ const Settings = () => {
 
               <Button onClick={saveBusinessSettings} disabled={loading} className="w-full md:w-auto">
                 <Save className="mr-2 h-4 w-4" />
-                {loading ? 'Saving...' : 'Save Business Settings'}
+                Save Business Settings
               </Button>
             </CardContent>
           </Card>
@@ -694,7 +694,7 @@ const Settings = () => {
                   </div>
                   
                   <Button onClick={createUser} disabled={loading} className="w-full">
-                    {loading ? 'Creating...' : 'Create User'}
+                    Create User
                   </Button>
                 </div>
               </DialogContent>
@@ -784,7 +784,7 @@ const Settings = () => {
                 
                 <Button onClick={changePassword} disabled={loading}>
                   <Lock className="mr-2 h-4 w-4" />
-                  {loading ? 'Changing...' : 'Change Password'}
+                  Change Password
                 </Button>
               </div>
             </CardContent>
@@ -885,7 +885,7 @@ const Settings = () => {
 
               <Button onClick={saveSystemSettings} disabled={loading}>
                 <Save className="mr-2 h-4 w-4" />
-                {loading ? 'Saving...' : 'Save System Settings'}
+                Save System Settings
               </Button>
             </CardContent>
           </Card>
@@ -992,7 +992,7 @@ const Settings = () => {
 
               <Button onClick={saveNotificationSettings} disabled={loading}>
                 <Save className="mr-2 h-4 w-4" />
-                {loading ? 'Saving...' : 'Save Notification Settings'}
+                Save Notification Settings
               </Button>
             </CardContent>
           </Card>
@@ -1014,7 +1014,7 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <Button onClick={exportData} disabled={loading} className="w-full">
                   <Download className="mr-2 h-4 w-4" />
-                  {loading ? 'Exporting...' : 'Export All Data'}
+                  Export All Data
                 </Button>
                 
                 <Alert>
@@ -1039,7 +1039,7 @@ const Settings = () => {
               <CardContent className="space-y-4">
                 <Button onClick={runBackup} disabled={loading} className="w-full">
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  {loading ? 'Running Backup...' : 'Run Manual Backup'}
+                  Run Manual Backup
                 </Button>
                 
                 <Alert>

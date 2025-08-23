@@ -39,7 +39,6 @@ const Index = () => {
     todayOrders: 0
   });
   const [recentActivity, setRecentActivity] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -83,8 +82,6 @@ const Index = () => {
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -204,17 +201,6 @@ const Index = () => {
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-gray-900 mx-auto"></div>
-          <p className="text-gray-600 text-lg font-medium">Loading dashboard...</p>
         </div>
       </div>
     );

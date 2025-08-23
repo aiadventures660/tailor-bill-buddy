@@ -975,7 +975,7 @@ const Billing = () => {
                     disabled={loading || !selectedCustomer || invoiceItems.length === 0}
                   >
                     <Receipt className="w-5 h-5 mr-2" />
-                    {loading ? 'Creating Bill...' : 'Generate Bill'}
+                    Generate Bill
                   </Button>
                 </CardContent>
               </Card>

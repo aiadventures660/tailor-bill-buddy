@@ -355,7 +355,7 @@ const NotificationCenter = () => {
                   disabled={loading || selectedCustomers.length === 0}
                 >
                   <Send className="w-4 h-4 mr-2" />
-                  {loading ? 'Sending...' : `Send to ${selectedCustomers.length} customers`}
+                  Send to {selectedCustomers.length} customers
                 </Button>
               </div>
             </CardContent>

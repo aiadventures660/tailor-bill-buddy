@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { LoadingSpinner, LoadingStats, LoadingTable, LoadingPage, LoadingButton } from '@/components/ui/loading';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -116,11 +117,15 @@ const Orders = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Real-time statistics
   const [orderStats, setOrderStats] = useState({
@@ -189,9 +194,7 @@ const Orders = () => {
   }, []);
 
   const fetchInitialData = async () => {
-    setLoading(true);
     await Promise.all([fetchOrders(), fetchCustomers()]);
-    setLoading(false);
   };
 
   const handleRefresh = async () => {
@@ -216,6 +219,9 @@ const Orders = () => {
 
   const fetchOrders = async () => {
     try {
+      setIsLoading(true);
+      setIsStatsLoading(true);
+      
       let query = supabase
         .from('orders')
         .select(`
@@ -260,12 +266,15 @@ const Orders = () => {
         description: 'Failed to fetch orders',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
+      setIsStatsLoading(false);
     }
   };
 
   const createOrder = async () => {
     try {
-      setLoading(true);
+      setIsSubmitting(true);
       
       const orderData = {
         customer_id: formData.customer_id,
@@ -288,6 +297,7 @@ const Orders = () => {
       toast({
         title: 'Success',
         description: 'Order created successfully',
+        variant: 'success',
       });
 
       setIsCreateDialogOpen(false);
@@ -301,14 +311,13 @@ const Orders = () => {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   const updateOrder = async () => {
     try {
       if (!selectedOrder) return;
-      setLoading(true);
       
       const updateData = {
         customer_id: formData.customer_id,
@@ -343,15 +352,12 @@ const Orders = () => {
         description: 'Failed to update order',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const deleteOrder = async () => {
     try {
       if (!selectedOrder) return;
-      setLoading(true);
 
       // First delete order items
       const { error: itemsError } = await supabase
@@ -384,8 +390,6 @@ const Orders = () => {
         description: 'Failed to delete order',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -463,24 +467,10 @@ const Orders = () => {
     return pages;
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-slate-900 mx-auto"></div>
-          <div>
-            <h3 className="text-lg font-medium text-slate-800">Loading Orders</h3>
-            <p className="text-slate-600">Fetching real-time data from database...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Refreshing Indicator */}
-      {refreshing && !loading && (
+      {refreshing && (
         <div className="fixed top-4 right-4 z-50 bg-white shadow-lg rounded-lg p-3 border">
           <div className="flex items-center space-x-2">
             <RefreshCw className="h-4 w-4 animate-spin text-slate-600" />
@@ -534,14 +524,17 @@ const Orders = () => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
+          {isStatsLoading ? (
+            <LoadingStats count={4} className="mb-6 lg:mb-8" />
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
             <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-slate-50 hover:shadow-xl transition-all duration-300">
               <CardContent className="p-3 sm:p-4 lg:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-slate-600 text-xs sm:text-sm">Total Orders</p>
-                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
-                      {loading ? '...' : orderStats.total}
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">
+                      {orderStats.total}
                     </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-blue-100 rounded-full">
@@ -559,8 +552,8 @@ const Orders = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-slate-600 text-xs sm:text-sm">Pending</p>
-                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
-                      {loading ? '...' : orderStats.pending}
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">
+                      {orderStats.pending}
                     </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-yellow-100 rounded-full">
@@ -578,8 +571,8 @@ const Orders = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-slate-600 text-xs sm:text-sm">In Progress</p>
-                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
-                      {loading ? '...' : orderStats.inProgress}
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">
+                      {orderStats.inProgress}
                     </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-orange-100 rounded-full">
@@ -597,8 +590,8 @@ const Orders = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-slate-600 text-xs sm:text-sm">Ready</p>
-                    <p className={`text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 ${loading ? 'animate-pulse' : ''}`}>
-                      {loading ? '...' : orderStats.ready}
+                    <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800">
+                      {orderStats.ready}
                     </p>
                   </div>
                   <div className="p-2 sm:p-3 bg-green-100 rounded-full">
@@ -611,62 +604,7 @@ const Orders = () => {
               </CardContent>
             </Card>
           </div>
-
-          {/* Additional Stats Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100 hover:shadow-xl transition-all duration-300">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-700 text-sm font-medium">Total Revenue</p>
-                    <p className="text-2xl font-bold text-blue-900">
-                      ₹{orderStats.totalRevenue.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-blue-600 mt-1">From completed orders</p>
-                  </div>
-                  <div className="p-3 bg-blue-200 rounded-full">
-                    <DollarSign className="h-6 w-6 text-blue-700" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-50 to-orange-100 hover:shadow-xl transition-all duration-300">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-orange-700 text-sm font-medium">Pending Revenue</p>
-                    <p className="text-2xl font-bold text-orange-900">
-                      ₹{orderStats.pendingRevenue.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-orange-600 mt-1">Outstanding balances</p>
-                  </div>
-                  <div className="p-3 bg-orange-200 rounded-full">
-                    <TrendingUp className="h-6 w-6 text-orange-700" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100 hover:shadow-xl transition-all duration-300">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-green-700 text-sm font-medium">Completion Rate</p>
-                    <p className="text-2xl font-bold text-green-900">
-                      {orderStats.total > 0 ? Math.round((orderStats.delivered / orderStats.total) * 100) : 0}%
-                    </p>
-                    <p className="text-xs text-green-600 mt-1">
-                      {orderStats.delivered} of {orderStats.total} orders
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-200 rounded-full">
-                    <CheckCircle className="h-6 w-6 text-green-700" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          )}
 
           {/* Search and Filters */}
           <div className="flex flex-col gap-3 sm:gap-4 mb-6">
@@ -714,10 +652,34 @@ const Orders = () => {
         </div>
 
         {/* Orders Display */}
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
-          </div>
+        {isLoading ? (
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-8">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-white rounded-lg border p-6 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-24"></div>
+                        <div className="h-3 bg-gray-200 rounded w-32"></div>
+                      </div>
+                      <div className="h-6 w-16 bg-gray-200 rounded-full"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 bg-gray-200 rounded w-full"></div>
+                      <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="h-6 bg-gray-200 rounded w-20"></div>
+                      <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <LoadingTable rows={6} columns={5} />
+          )
         ) : filteredOrders.length === 0 ? (
           <Card className="border-0 shadow-lg bg-white/50 backdrop-blur-sm">
             <CardContent className="p-6 sm:p-8 lg:p-12 text-center">
@@ -1052,12 +1014,16 @@ const Orders = () => {
             </div>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} className="w-full sm:w-auto">
+            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} className="w-full sm:w-auto" disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button onClick={createOrder} disabled={loading} className="w-full sm:w-auto">
-              {loading ? 'Creating...' : 'Create Order'}
-            </Button>
+            <LoadingButton 
+              onClick={createOrder} 
+              isLoading={isSubmitting}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto"
+            >
+              Create Order
+            </LoadingButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1145,8 +1111,8 @@ const Orders = () => {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button onClick={updateOrder} disabled={loading} className="w-full sm:w-auto">
-              {loading ? 'Updating...' : 'Update Order'}
+            <Button onClick={updateOrder} className="w-full sm:w-auto">
+              Update Order
             </Button>
           </DialogFooter>
         </DialogContent>

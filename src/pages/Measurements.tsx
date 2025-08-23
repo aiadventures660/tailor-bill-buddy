@@ -87,7 +87,6 @@ const clothingTypeFields = {
 const Measurements = () => {
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -219,7 +218,6 @@ const Measurements = () => {
   };
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       await Promise.all([fetchMeasurements(), fetchCustomers()]);
     } catch (error: any) {
@@ -229,8 +227,6 @@ const Measurements = () => {
         description: error.message,
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -696,14 +692,7 @@ const Measurements = () => {
 
         {/* Measurements List - Collapsible Cards */}
         <div className="space-y-3 sm:space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-64 bg-white rounded-lg border">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-                <p className="text-gray-600 mt-4 text-lg">Loading measurements...</p>
-              </div>
-            </div>
-          ) : filteredMeasurements.length === 0 ? (
+          {filteredMeasurements.length === 0 ? (
             <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="pt-6">
                 <div className="text-center py-12">

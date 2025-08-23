@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { LoadingSpinner, LoadingCard, LoadingStats, LoadingButton } from '@/components/ui/loading';
 import { 
   Package, 
   Plus, 
@@ -36,12 +37,14 @@ interface ReadyMadeItem {
 const Inventory = () => {
   const { profile } = useAuth();
   const [items, setItems] = useState<ReadyMadeItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ReadyMadeItem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -56,6 +59,8 @@ const Inventory = () => {
   }, []);
 
   const fetchItems = async () => {
+    setLoading(true);
+    setIsStatsLoading(true);
     try {
       const { data, error } = await supabase
         .from('ready_made_items')
@@ -73,6 +78,7 @@ const Inventory = () => {
       });
     } finally {
       setLoading(false);
+      setIsStatsLoading(false);
     }
   };
 
@@ -88,6 +94,7 @@ const Inventory = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       if (editingItem) {
         const { error } = await supabase
@@ -128,6 +135,8 @@ const Inventory = () => {
         description: error.message || 'Failed to save item',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -202,14 +211,6 @@ const Inventory = () => {
   const formatCurrency = (amount: number) => {
     return `₹${amount.toLocaleString('en-IN')}`;
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -315,7 +316,9 @@ const Inventory = () => {
                   <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit">Add Item</Button>
+                  <LoadingButton type="submit" isLoading={isSubmitting}>
+                    Add Item
+                  </LoadingButton>
                 </div>
               </form>
             </DialogContent>
@@ -324,61 +327,65 @@ const Inventory = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Box className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{items.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Unique product variants
-            </p>
-          </CardContent>
-        </Card>
+      {isStatsLoading ? (
+        <LoadingStats count={4} className="mb-6" />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+              <Box className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{items.length}</div>
+              <p className="text-xs text-muted-foreground">
+                Unique product variants
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Stock</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {items.reduce((sum, item) => sum + item.stock_quantity, 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Total inventory count
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Stock</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {items.reduce((sum, item) => sum + item.stock_quantity, 0)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Total inventory count
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{lowStockItems.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Items with ≤5 stock
-            </p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">{lowStockItems.length}</div>
+              <p className="text-xs text-muted-foreground">
+                Items with ≤5 stock
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalValue)}</div>
-            <p className="text-xs text-muted-foreground">
-              Total stock value
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(totalValue)}</div>
+              <p className="text-xs text-muted-foreground">
+                Total stock value
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters */}
       <Card>
@@ -437,7 +444,13 @@ const Inventory = () => {
 
       {/* Items Grid */}
       <div className="grid gap-4">
-        {filteredItems.length === 0 ? (
+        {loading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <LoadingCard key={i} />
+            ))}
+          </div>
+        ) : filteredItems.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
               <div className="text-center py-8">
@@ -586,7 +599,9 @@ const Inventory = () => {
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Update Item</Button>
+              <LoadingButton type="submit" isLoading={isSubmitting}>
+                Update Item
+              </LoadingButton>
             </div>
           </form>
         </DialogContent>
