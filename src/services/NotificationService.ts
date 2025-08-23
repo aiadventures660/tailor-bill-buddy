@@ -22,8 +22,8 @@ export interface CustomerNotification {
 
 export class NotificationService {
   private static instance: NotificationService;
-  private baseUrl = process.env.REACT_APP_NOTIFICATION_API_URL || '';
-  private apiKey = process.env.REACT_APP_NOTIFICATION_API_KEY || '';
+  private baseUrl = '';
+  private apiKey = '';
 
   private constructor() {}
 
@@ -173,7 +173,7 @@ Visit us or call ${data.shopContact} to place your order.
       customerName: customer.name,
       orderNumber: order.order_number,
       items: order.items || [],
-      shopContact: process.env.REACT_APP_SHOP_CONTACT || '+91-XXXXXXXXXX'
+      shopContact: '+91-XXXXXXXXXX'
     });
 
     const phoneNumber = customer.mobile.startsWith('+') ? customer.mobile : `+91${customer.mobile}`;
@@ -208,7 +208,7 @@ Visit us or call ${data.shopContact} to place your order.
     const template = this.getTemplate('measurement_ready', {
       customerName: customer.name,
       clothingType: measurement.clothing_type,
-      shopContact: process.env.REACT_APP_SHOP_CONTACT || '+91-XXXXXXXXXX'
+      shopContact: '+91-XXXXXXXXXX'
     });
 
     const phoneNumber = customer.mobile.startsWith('+') ? customer.mobile : `+91${customer.mobile}`;
