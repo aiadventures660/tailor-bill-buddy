@@ -366,7 +366,7 @@ const Customers = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      <div className="container mx-auto px-4 py-6 max-w-7xl space-y-6">
+      <div className="w-full pr-2 sm:pr-4 lg:pr-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
         {/* Header Section */}
         <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">

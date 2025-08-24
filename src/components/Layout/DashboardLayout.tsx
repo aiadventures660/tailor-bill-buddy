@@ -520,7 +520,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           </header>
 
           {/* Page Content */}
-          <main className="flex-1 p-2 sm:p-3 lg:p-6 overflow-x-hidden">
+          <main className="flex-1 p-2 sm:p-3 lg:pr-6 lg:pt-6 lg:pb-6 lg:pl-0 overflow-x-hidden">
             {children}
           </main>
         </SidebarInset>

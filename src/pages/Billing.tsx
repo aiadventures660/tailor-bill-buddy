@@ -30,7 +30,9 @@ import {
   DollarSign,
   TrendingUp,
   Package,
-  MessageSquare
+  MessageSquare,
+  Eye,
+  Copy
 } from 'lucide-react';
 
 interface Customer {
@@ -56,6 +58,12 @@ interface InvoiceItem {
     length: string;
     waist: string;
     hip: string;
+    neck: string;
+    sleeve: string;
+    kurta_length: string;
+    pajama_waist: string;
+    pajama_length: string;
+    blouse_length: string;
   };
 }
 
@@ -89,6 +97,7 @@ const Billing = () => {
   const [activeTab, setActiveTab] = useState<'create' | 'list'>('create');
   const [sendNotification, setSendNotification] = useState(true);
   const [notificationChannel, setNotificationChannel] = useState<'sms' | 'whatsapp'>('sms');
+  const [showPreview, setShowPreview] = useState(false);
   const [billStats, setBillStats] = useState({
     totalBills: 0,
     totalAmount: 0,
@@ -108,7 +117,13 @@ const Billing = () => {
       shoulder: '',
       length: '',
       waist: '',
-      hip: ''
+      hip: '',
+      neck: '',
+      sleeve: '',
+      kurta_length: '',
+      pajama_waist: '',
+      pajama_length: '',
+      blouse_length: ''
     }
   });
 
@@ -148,6 +163,44 @@ const Billing = () => {
     return `INV-${year}${month}-${timestamp}`;
   };
 
+  // Get measurement fields based on clothing type
+  const getMeasurementFields = (clothingType: string) => {
+    switch (clothingType) {
+      case 'shirt':
+        return ['chest', 'shoulder', 'length', 'neck', 'sleeve'];
+      case 'pant':
+        return ['waist', 'hip', 'length'];
+      case 'suit':
+        return ['chest', 'shoulder', 'length', 'waist', 'neck', 'sleeve'];
+      case 'kurta_pajama':
+        return ['chest', 'shoulder', 'kurta_length', 'pajama_waist', 'pajama_length'];
+      case 'blouse':
+        return ['chest', 'shoulder', 'blouse_length'];
+      case 'saree_blouse':
+        return ['chest', 'shoulder', 'blouse_length'];
+      default:
+        return ['chest', 'shoulder', 'length'];
+    }
+  };
+
+  // Get display label for measurement field
+  const getMeasurementLabel = (field: string) => {
+    const labels: { [key: string]: string } = {
+      chest: 'Chest',
+      shoulder: 'Shoulder', 
+      length: 'Length',
+      waist: 'Waist',
+      hip: 'Hip',
+      neck: 'Neck',
+      sleeve: 'Sleeve',
+      kurta_length: 'Kurta Length',
+      pajama_waist: 'Pajama Waist',
+      pajama_length: 'Pajama Length',
+      blouse_length: 'Blouse Length'
+    };
+    return labels[field] || field;
+  };
+
   const fetchCustomers = async () => {
     try {
       const { data, error } = await supabase
@@ -173,33 +226,73 @@ const Billing = () => {
         .from('orders')
         .select(`
           *,
-          customer:customers(*)
+          customer:customers(*),
+          order_items(*)
         `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
-      const transformedInvoices = (data || []).map(order => ({
-        id: order.id,
-        invoice_number: order.order_number,
-        customer_id: order.customer_id,
-        customer: order.customer,
-        items: [],
-        subtotal: order.total_amount || 0,
-        gst_rate: 18,
-        gst_amount: (order.total_amount || 0) * 0.18,
-        total_amount: order.total_amount || 0,
-        created_at: order.created_at,
-        due_date: order.due_date,
-        notes: order.notes,
-        status: order.status === 'delivered' ? ('paid' as const) : ('draft' as const)
-      }));
+      const transformedInvoices = (data || []).map(order => {
+        // Transform order items to match InvoiceItem interface
+        const items = (order.order_items || []).map((orderItem: any) => ({
+          id: orderItem.id.toString(),
+          type: orderItem.item_type,
+          description: orderItem.description,
+          quantity: orderItem.quantity,
+          unit_price: orderItem.unit_price,
+          total_price: orderItem.total_price,
+          hsn_code: orderItem.hsn_code || undefined,
+          clothingType: orderItem.clothing_type,
+          measurements: orderItem.measurements || {}
+        }));
+
+        // Calculate totals from items
+        const subtotal = items.reduce((sum: number, item: any) => sum + item.total_price, 0);
+        const gstAmount = (subtotal * 18) / 100;
+
+        return {
+          id: order.id,
+          invoice_number: order.order_number,
+          customer_id: order.customer_id,
+          customer: order.customer,
+          items: items,
+          subtotal: subtotal,
+          gst_rate: 18,
+          gst_amount: gstAmount,
+          total_amount: order.total_amount,
+          created_at: order.created_at,
+          due_date: order.due_date,
+          notes: order.notes,
+          status: order.status === 'delivered' ? ('paid' as const) : 
+                 order.status === 'cancelled' ? ('draft' as const) : 
+                 ('draft' as const)
+        };
+      });
       
       setInvoices(transformedInvoices);
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
     }
   };
+
+  // Real-time subscription for invoice updates
+  useEffect(() => {
+    const subscription = supabase
+      .channel('orders_changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          console.log('Real-time update:', payload);
+          fetchInvoices(); // Refresh invoices on any change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const addItem = () => {
     if (!newItem.description || newItem.unit_price <= 0) {
@@ -212,7 +305,7 @@ const Billing = () => {
     }
 
     if (newItem.type === 'stitching') {
-      const requiredMeasurements = ['chest', 'shoulder', 'length'];
+      const requiredMeasurements = getMeasurementFields(newItem.clothingType);
       const missingMeasurements = requiredMeasurements.filter(
         field => !newItem.measurements[field as keyof typeof newItem.measurements]
       );
@@ -220,7 +313,7 @@ const Billing = () => {
       if (missingMeasurements.length > 0) {
         toast({
           title: "Measurement Required",
-          description: `Please provide measurements for: ${missingMeasurements.join(', ')}`,
+          description: `Please provide measurements for: ${missingMeasurements.map(field => getMeasurementLabel(field)).join(', ')}`,
           variant: "destructive"
         });
         return;
@@ -254,7 +347,13 @@ const Billing = () => {
         shoulder: '',
         length: '',
         waist: '',
-        hip: ''
+        hip: '',
+        neck: '',
+        sleeve: '',
+        kurta_length: '',
+        pajama_waist: '',
+        pajama_length: '',
+        blouse_length: ''
       }
     });
   };
@@ -324,6 +423,8 @@ const Billing = () => {
         ready_made_item_id: null,
         measurement_id: null,
         clothing_type: item.type === 'stitching' ? (item.clothingType || 'shirt') : null
+        // Note: hsn_code and measurements will be stored in the printed bill but not in database yet
+        // until database migration is applied
       }));
 
       const { error: itemsError } = await supabase
@@ -332,9 +433,35 @@ const Billing = () => {
 
       if (itemsError) throw itemsError;
 
+      // Create invoice object for immediate printing
+      const newInvoice: Invoice = {
+        id: orderResult.id,
+        invoice_number: invoiceNumber,
+        customer_id: selectedCustomer.id,
+        customer: {
+          id: selectedCustomer.id,
+          name: selectedCustomer.name,
+          mobile: selectedCustomer.mobile,
+          address: selectedCustomer.address || '',
+          email: selectedCustomer.email || ''
+        },
+        items: invoiceItems,
+        subtotal: subtotal,
+        gst_rate: gstRate,
+        gst_amount: gstAmount,
+        total_amount: totalAmount,
+        due_date: dueDate,
+        notes: notes,
+        status: 'draft',
+        created_at: new Date().toISOString()
+      };
+
+      // Automatically open print preview
+      generatePDF(newInvoice);
+
       toast({
         title: "Success",
-        description: `Bill ${invoiceNumber} created successfully`,
+        description: `Bill ${invoiceNumber} created and ready to print`,
       });
 
       if (sendNotification && selectedCustomer) {
@@ -354,9 +481,20 @@ const Billing = () => {
 
     } catch (error: any) {
       console.error('Error creating invoice:', error);
+      
+      // More detailed error messages
+      let errorMessage = "Failed to create invoice";
+      if (error?.message?.includes('order_items')) {
+        errorMessage = "Failed to save order items. Please check your data and try again.";
+      } else if (error?.message?.includes('orders')) {
+        errorMessage = "Failed to create order. Please check customer information.";
+      } else if (error?.code === '23505') {
+        errorMessage = "Duplicate order number. Please try again.";
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to create invoice",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -374,11 +512,182 @@ const Billing = () => {
     printWindow.print();
   };
 
+  const previewBill = () => {
+    if (!selectedCustomer || invoiceItems.length === 0) {
+      toast({
+        title: "Preview Error",
+        description: "Please select a customer and add at least one item to preview",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const { subtotal, gstAmount, totalAmount } = calculateTotals();
+    const previewInvoice: Invoice = {
+      id: 'preview',
+      invoice_number: 'PREVIEW-' + Date.now().toString().slice(-6),
+      customer_id: selectedCustomer.id,
+      customer: {
+        id: selectedCustomer.id,
+        name: selectedCustomer.name,
+        mobile: selectedCustomer.mobile,
+        address: selectedCustomer.address || '',
+        email: selectedCustomer.email || ''
+      },
+      items: invoiceItems,
+      subtotal: subtotal,
+      gst_rate: gstRate,
+      gst_amount: gstAmount,
+      total_amount: totalAmount,
+      due_date: dueDate,
+      notes: notes,
+      status: 'draft',
+      created_at: new Date().toISOString()
+    };
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: "Preview Error", 
+        description: "Please allow popups to preview the bill",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const invoiceHTML = generateInvoiceHTML(previewInvoice);
+    printWindow.document.write(invoiceHTML);
+    printWindow.document.close();
+  };
+
   const sendInvoiceNotification = async (invoice: Invoice) => {
     toast({
       title: "Notification Sent",
       description: `Bill receipt sent to ${invoice.customer.name}`,
     });
+  };
+
+  // CRUD Operations for Bill Management
+  const updateInvoiceStatus = async (invoiceId: string, newStatus: 'draft' | 'paid' | 'sent') => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: newStatus === 'paid' ? 'delivered' : newStatus === 'sent' ? 'pending' : 'pending'
+        })
+        .eq('id', invoiceId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Bill status updated to ${newStatus}`,
+      });
+
+      fetchInvoices(); // Refresh the list
+    } catch (error: any) {
+      console.error('Error updating invoice status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update bill status",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const deleteInvoice = async (invoiceId: string) => {
+    if (!confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      // First delete order items
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', invoiceId);
+
+      if (itemsError) throw itemsError;
+
+      // Then delete the order
+      const { error: orderError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', invoiceId);
+
+      if (orderError) throw orderError;
+
+      toast({
+        title: "Success",
+        description: "Bill deleted successfully",
+      });
+
+      fetchInvoices(); // Refresh the list
+    } catch (error: any) {
+      console.error('Error deleting invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete bill",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const duplicateInvoice = async (invoice: Invoice) => {
+    try {
+      const newInvoiceNumber = generateInvoiceNumber();
+      
+      const orderData = {
+        order_number: newInvoiceNumber,
+        customer_id: invoice.customer_id,
+        total_amount: invoice.total_amount,
+        due_date: invoice.due_date,
+        notes: invoice.notes,
+        status: 'pending' as const,
+        created_by: profile?.id || ''
+      };
+
+      const { data: orderResult, error: orderError } = await supabase
+        .from('orders')
+        .insert(orderData)
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Create order items
+      const orderItems = invoice.items.map(item => ({
+        order_id: orderResult.id,
+        item_type: item.type,
+        description: item.description,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+        ready_made_item_id: null,
+        measurement_id: null,
+        clothing_type: item.type === 'stitching' ? (item.clothingType || 'shirt') : null
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) throw itemsError;
+
+      toast({
+        title: "Success",
+        description: `Bill duplicated as ${newInvoiceNumber}`,
+      });
+
+      fetchInvoices(); // Refresh the list
+    } catch (error: any) {
+      console.error('Error duplicating invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to duplicate bill",
+        variant: "destructive"
+      });
+    }
   };
 
   const generateInvoiceHTML = (invoice: Invoice) => {
@@ -394,94 +703,330 @@ const Billing = () => {
       <head>
         <title>Bill ${invoice.invoice_number}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }
-          .invoice-header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-          .invoice-header h1 { color: #000; margin: 0; font-size: 28px; }
-          .invoice-header h2 { color: #666; margin: 5px 0; font-size: 18px; }
-          .invoice-details { display: flex; justify-content: space-between; margin-bottom: 30px; }
-          .customer-details, .invoice-info { width: 45%; }
-          .invoice-info { text-align: right; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-          th { background-color: #f8f9fa; font-weight: bold; }
-          .totals { width: 100%; margin-top: 20px; }
-          .totals td { border: none; padding: 8px 0; }
-          .total-row { font-weight: bold; font-size: 18px; border-top: 2px solid #000; }
-          .notes { margin-top: 30px; padding: 15px; background-color: #f8f9fa; }
-          @media print { .no-print { display: none; } }
+          body { 
+            font-family: 'Nunito', sans-serif; 
+            margin: 0; 
+            padding: 5px; 
+            color: #000; 
+            font-size: 14px;
+            line-height: 1.4;
+            max-width: 100%;
+          }
+          .bill-header { 
+            text-align: center; 
+            margin-bottom: 15px; 
+            border-bottom: 2px solid #000; 
+            padding-bottom: 10px; 
+            margin-left: 0;
+            margin-right: 0;
+          }
+          .bill-header h1 { 
+            color: #000; 
+            margin: 0; 
+            font-size: 28px; 
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+          }
+          .bill-header h2 { 
+            color: #333; 
+            margin: 3px 0; 
+            font-size: 14px; 
+            font-weight: normal;
+          }
+          .bill-header p { 
+            margin: 2px 0; 
+            font-size: 12px; 
+          }
+          .address-section {
+            background: #f8f8f8;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 8px 0;
+            border: 1px solid #e0e0e0;
+          }
+          .bill-info { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 15px; 
+            font-size: 12px;
+            margin-left: 0;
+            margin-right: 0;
+            padding-left: 0;
+            padding-right: 0;
+          }
+          .customer-info, .bill-details { 
+            width: 48%; 
+          }
+          .bill-details { 
+            text-align: right; 
+          }
+          .bill-details p, .customer-info p { 
+            margin: 2px 0; 
+          }
+          .bill-number {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            margin-left: 0;
+            padding-left: 0;
+          }
+          
+          /* Fabric Details Section */
+          .fabric-section {
+            margin: 10px 0;
+            margin-left: 0;
+            padding-left: 0;
+          }
+          .section-title {
+            background: #f0f0f0;
+            padding: 6px;
+            font-weight: bold;
+            border: 1px solid #000;
+            margin: 0;
+            font-size: 12px;
+          }
+          .fabric-table, .stitching-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            border: 1px solid #000;
+          }
+          .fabric-table th, .fabric-table td,
+          .stitching-table th, .stitching-table td {
+            border: 1px solid #000;
+            padding: 6px;
+            text-align: center;
+            font-size: 11px;
+          }
+          .fabric-table th, .stitching-table th {
+            background: #f8f8f8;
+            font-weight: bold;
+          }
+          .description-col {
+            text-align: left !important;
+            width: 40%;
+          }
+          
+          /* Totals Section */
+          .totals-section {
+            margin-top: 15px;
+            float: right;
+            width: 250px;
+          }
+          .totals-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .totals-table td {
+            padding: 6px;
+            border: 1px solid #000;
+            font-size: 12px;
+          }
+          .totals-table .total-row {
+            font-weight: bold;
+            background: #f0f0f0;
+          }
+          
+          /* Footer */
+          .bill-footer {
+            clear: both;
+            margin-top: 30px;
+            text-align: center;
+            border-top: 1px solid #000;
+            padding-top: 10px;
+          }
+          .delivery-date {
+            margin: 15px 0;
+            font-size: 12px;
+            font-weight: bold;
+          }
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+          }
+          .signature-box {
+            text-align: center;
+            width: 180px;
+          }
+          .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 30px;
+            padding-top: 5px;
+            font-size: 10px;
+          }
+          .notes-section {
+            margin: 15px 0;
+            border: 1px solid #000;
+            padding: 8px;
+            font-size: 11px;
+          }
+          
+          @media print { 
+            .no-print { display: none; } 
+            body { 
+              -webkit-print-color-adjust: exact;
+              margin: 0;
+              padding: 0;
+            }
+            .fabric-table th, .stitching-table th, .totals-table .total-row {
+              background: #f0f0f0 !important;
+            }
+          }
         </style>
       </head>
       <body>
-        <div class="invoice-header">
-          <h1>PROFESSIONAL BILL</h1>
-          <h2>Tailor Bill Buddy</h2>
+        <div class="bill-header">
+          <h1>A1 खादी भंडार</h1>
+          <div class="address-section">
+            <p><strong>बेलवाटिका,नियर मोही टेलर्स,डाल्टनगंज</strong></p>
+            <p>Mob: 7482621237, 9525519989</p>
+          </div>
         </div>
         
-        <div class="invoice-details">
-          <div class="customer-details">
-            <h3>Bill To:</h3>
-            <p><strong>${invoice.customer.name}</strong></p>
-            <p>${invoice.customer.mobile}</p>
-            ${invoice.customer.email ? `<p>${invoice.customer.email}</p>` : ''}
-            ${invoice.customer.address ? `<p>${invoice.customer.address}</p>` : ''}
+        <div class="bill-number">
+          बिल नं. / Bill No.: ${invoice.invoice_number}
+        </div>
+        
+        <div class="bill-info">
+          <div class="customer-info">
+            <p><strong>नाम / Name:</strong> ${invoice.customer.name}</p>
+            <p><strong>मोबाइल / Mobile:</strong> ${invoice.customer.mobile}</p>
+            ${invoice.customer.address ? `<p><strong>पता / Address:</strong> ${invoice.customer.address}</p>` : ''}
           </div>
-          
-          <div class="invoice-info">
-            <p><strong>Bill Number:</strong> ${invoice.invoice_number}</p>
-            <p><strong>Date:</strong> ${new Date(invoice.created_at || '').toLocaleDateString()}</p>
-            ${invoice.due_date ? `<p><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>` : ''}
+          <div class="bill-details">
+            <p><strong>दिनांक / Date:</strong> ${new Date(invoice.created_at || '').toLocaleDateString('en-IN')}</p>
+            ${invoice.due_date ? `<p><strong>Delivery Date:</strong> ${new Date(invoice.due_date).toLocaleDateString('en-IN')}</p>` : ''}
           </div>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th>Type</th>
-              <th>HSN Code</th>
-              <th>Qty</th>
-              <th>Rate</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${invoice.items.map(item => `
+        <!-- Fabric Details Section -->
+        <div class="fabric-section">
+          <div class="section-title">Fabric Details:</div>
+          <table class="fabric-table">
+            <thead>
               <tr>
-                <td>${item.description}</td>
-                <td>${item.type === 'ready_made' ? 'Ready Made' : 'Custom Stitching'}</td>
-                <td>${item.hsn_code || '-'}</td>
-                <td>${item.quantity}</td>
-                <td>₹${item.unit_price.toFixed(2)}</td>
-                <td>₹${item.total_price.toFixed(2)}</td>
+                <th class="description-col">विवरण / Description</th>
+                <th>मात्रा / Qty</th>
+                <th>दर / Rate</th>
+                <th>रकम / Amount</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${invoice.items.filter(item => item.type === 'ready_made').map(item => `
+                <tr>
+                  <td class="description-col">${item.description}</td>
+                  <td>${item.quantity}</td>
+                  <td>₹${item.unit_price.toFixed(2)}</td>
+                  <td>₹${item.total_price.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+              ${invoice.items.filter(item => item.type === 'ready_made').length === 0 ? `
+                <tr>
+                  <td class="description-col">-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+              ` : ''}
+            </tbody>
+          </table>
+        </div>
 
-        <table class="totals" style="width: 300px; margin-left: auto;">
-          <tr>
-            <td>Subtotal:</td>
-            <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td>GST (${invoice.gst_rate}%):</td>
-            <td style="text-align: right;">₹${gstAmount.toFixed(2)}</td>
-          </tr>
-          <tr class="total-row">
-            <td>Total Amount:</td>
-            <td style="text-align: right;">₹${totalAmount.toFixed(2)}</td>
-          </tr>
-        </table>
+        <!-- Stitching Details Section -->
+        <div class="fabric-section">
+          <div class="section-title">Stitching Details:</div>
+          <table class="stitching-table">
+            <thead>
+              <tr>
+                <th class="description-col">विवरण / Description</th>
+                <th>मात्रा / Qty</th>
+                <th>दर / Rate</th>
+                <th>रकम / Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${invoice.items.filter(item => item.type === 'stitching').map(item => `
+                <tr>
+                  <td class="description-col">
+                    ${item.description}
+                    ${item.measurements && item.clothingType ? `
+                      <br><small style="color: #666;">
+                        Measurements: ${getMeasurementFields(item.clothingType)
+                          .filter(field => item.measurements![field as keyof typeof item.measurements])
+                          .map(field => `${getMeasurementLabel(field)}: ${item.measurements![field as keyof typeof item.measurements]}"`)
+                          .join(', ')}
+                      </small>
+                    ` : ''}
+                  </td>
+                  <td>${item.quantity}</td>
+                  <td>₹${item.unit_price.toFixed(2)}</td>
+                  <td>₹${item.total_price.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+              ${invoice.items.filter(item => item.type === 'stitching').length === 0 ? `
+                <tr>
+                  <td class="description-col">-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+              ` : ''}
+            </tbody>
+          </table>
+        </div>
 
-        ${invoice.notes ? `
-          <div class="notes">
-            <h4>Notes:</h4>
-            <p>${invoice.notes}</p>
+        <!-- Totals Section -->
+        <div class="totals-section">
+          <table class="totals-table">
+            <tr>
+              <td>कुल / Subtotal:</td>
+              <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td>GST (${invoice.gst_rate}%):</td>
+              <td style="text-align: right;">₹${gstAmount.toFixed(2)}</td>
+            </tr>
+            <tr class="total-row">
+              <td><strong>कुल योग / Total:</strong></td>
+              <td style="text-align: right;"><strong>₹${totalAmount.toFixed(2)}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="clear: both;"></div>
+
+        ${invoice.due_date ? `
+          <div class="delivery-date">
+            <strong>Delivery Date:</strong> ${new Date(invoice.due_date).toLocaleDateString('en-IN', { 
+              weekday: 'long',
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
           </div>
         ` : ''}
 
-        <div style="margin-top: 50px; text-align: center; color: #666;">
-          <p>Thank you for your business!</p>
+        ${invoice.notes ? `
+          <div class="notes-section">
+            <strong>विशेष टिप्पणी / Special Notes:</strong><br />
+            ${invoice.notes}
+          </div>
+        ` : ''}
+
+        <div class="signature-section">
+          <div class="signature-box">
+            <div class="signature-line">ग्राहक के हस्ताक्षर<br>Customer Signature</div>
+          </div>
+          <div class="signature-box">
+            <div class="signature-line">दुकानदार के हस्ताक्षर<br>Shopkeeper Signature</div>
+          </div>
+        </div>
+
+        <div class="bill-footer">
+          <p><strong>धन्यवाद / Thank You!</strong></p>
+          <p style="font-size: 12px;">Quality Tailoring Services • Professional Stitching • Customer Satisfaction</p>
         </div>
       </body>
       </html>
@@ -496,17 +1041,18 @@ const Billing = () => {
   const { subtotal, gstAmount, totalAmount } = calculateTotals();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header Section */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pl-2 pr-2 md:pl-3 md:pr-2">
+      <div className="max-w-7xl ml-0 mr-auto space-y-6 pr-2 md:pr-2 lg:pr-4">
+        {/* Header Section - Traditional Style */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 pl-3 pt-3 pr-3 pb-3 md:pl-4 md:pt-6 md:pr-6 md:pb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-2">
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 flex items-center gap-3">
                 <Receipt className="w-8 h-8 text-gray-800" />
-                Professional Billing
+                A1 Tailor & Designer
               </h1>
-              <p className="text-gray-600 text-lg">Generate professional bills for ready-made and custom stitching services</p>
+              <h2 className="text-xl text-gray-700 font-medium">Gents-Ladies Tailor & Fashion Designer</h2>
+              <p className="text-gray-600 text-lg">Professional Billing System • Custom Stitching • Ready-Made Garments</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button
@@ -515,7 +1061,7 @@ const Billing = () => {
                 className="bg-gray-900 hover:bg-gray-800 text-white border-gray-300"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Create Bill
+                नया बिल / Create Bill
               </Button>
               <Button
                 variant={activeTab === 'list' ? 'default' : 'outline'}
@@ -523,14 +1069,14 @@ const Billing = () => {
                 className="bg-gray-900 hover:bg-gray-800 text-white border-gray-300"
               >
                 <FileText className="w-4 h-4 mr-2" />
-                View Bills
+                बिल देखें / View Bills
               </Button>
             </div>
           </div>
         </div>
 
         {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
           <Card className="bg-white border-gray-200 shadow-lg hover:shadow-xl transition-shadow">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -588,7 +1134,7 @@ const Billing = () => {
         {/* Create Bill Section */}
         {activeTab === 'create' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 md:gap-6">
               {/* Customer Selection */}
               <Card className="bg-white border-gray-200 shadow-lg">
                 <CardHeader className="bg-gray-50 border-b border-gray-200">
@@ -770,60 +1316,25 @@ const Billing = () => {
 
                   {newItem.type === 'stitching' && (
                     <div className="space-y-3">
-                      <Label className="text-gray-700 font-medium">Measurements (inches)</Label>
+                      <Label className="text-gray-700 font-medium">Measurements (inches) - {newItem.clothingType.replace('_', ' ').toUpperCase()}</Label>
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label htmlFor="chest" className="text-sm text-gray-600">Chest *</Label>
-                          <Input
-                            id="chest"
-                            placeholder="36"
-                            value={newItem.measurements.chest}
-                            onChange={(e) => setNewItem({ 
-                              ...newItem, 
-                              measurements: { ...newItem.measurements, chest: e.target.value }
-                            })}
-                            className="mt-1 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="shoulder" className="text-sm text-gray-600">Shoulder *</Label>
-                          <Input
-                            id="shoulder"
-                            placeholder="16"
-                            value={newItem.measurements.shoulder}
-                            onChange={(e) => setNewItem({ 
-                              ...newItem, 
-                              measurements: { ...newItem.measurements, shoulder: e.target.value }
-                            })}
-                            className="mt-1 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="length" className="text-sm text-gray-600">Length *</Label>
-                          <Input
-                            id="length"
-                            placeholder="28"
-                            value={newItem.measurements.length}
-                            onChange={(e) => setNewItem({ 
-                              ...newItem, 
-                              measurements: { ...newItem.measurements, length: e.target.value }
-                            })}
-                            className="mt-1 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="waist" className="text-sm text-gray-600">Waist</Label>
-                          <Input
-                            id="waist"
-                            placeholder="32"
-                            value={newItem.measurements.waist}
-                            onChange={(e) => setNewItem({ 
-                              ...newItem, 
-                              measurements: { ...newItem.measurements, waist: e.target.value }
-                            })}
-                            className="mt-1 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
-                          />
-                        </div>
+                        {getMeasurementFields(newItem.clothingType).map((field) => (
+                          <div key={field}>
+                            <Label htmlFor={field} className="text-sm text-gray-600">
+                              {getMeasurementLabel(field)} *
+                            </Label>
+                            <Input
+                              id={field}
+                              placeholder={field === 'chest' ? '36' : field === 'waist' ? '32' : field === 'length' ? '28' : '16'}
+                              value={newItem.measurements[field as keyof typeof newItem.measurements]}
+                              onChange={(e) => setNewItem({ 
+                                ...newItem, 
+                                measurements: { ...newItem.measurements, [field]: e.target.value }
+                              })}
+                              className="mt-1 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
+                            />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -969,94 +1480,173 @@ const Billing = () => {
                     </div>
                   )}
 
-                  <Button 
-                    onClick={createInvoice} 
-                    className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 text-lg font-medium"
-                    disabled={loading || !selectedCustomer || invoiceItems.length === 0}
-                  >
-                    <Receipt className="w-5 h-5 mr-2" />
-                    Generate Bill
-                  </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button 
+                      onClick={previewBill} 
+                      variant="outline"
+                      className="w-full border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white py-3 text-lg font-medium"
+                      disabled={loading || !selectedCustomer || invoiceItems.length === 0}
+                    >
+                      <Eye className="w-5 h-5 mr-2" />
+                      Preview Bill
+                    </Button>
+                    <Button 
+                      onClick={createInvoice} 
+                      className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 text-lg font-medium"
+                      disabled={loading || !selectedCustomer || invoiceItems.length === 0}
+                    >
+                      <Receipt className="w-5 h-5 mr-2" />
+                      Generate Bill
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </div>
         )}
 
-        {/* Items List */}
+        {/* Items List - Traditional Bill Style */}
         {activeTab === 'create' && invoiceItems.length > 0 && (
-          <Card className="bg-white border-gray-200 shadow-lg">
-            <CardHeader className="bg-gray-50 border-b border-gray-200">
-              <CardTitle className="text-gray-900">Bill Items</CardTitle>
-              <CardDescription className="text-gray-600">
-                Review and modify items before generating the bill
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead className="text-gray-700 font-medium">Description</TableHead>
-                      <TableHead className="text-gray-700 font-medium">Type</TableHead>
-                      <TableHead className="text-gray-700 font-medium">HSN Code</TableHead>
-                      <TableHead className="text-gray-700 font-medium">Qty</TableHead>
-                      <TableHead className="text-gray-700 font-medium">Rate</TableHead>
-                      <TableHead className="text-gray-700 font-medium">Amount</TableHead>
-                      <TableHead className="text-gray-700 font-medium">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoiceItems.map((item) => (
-                      <TableRow key={item.id} className="border-gray-200 hover:bg-gray-50">
-                        <TableCell className="text-gray-900">
-                          <div>
-                            <div className="font-medium">{item.description}</div>
-                            {item.type === 'stitching' && item.measurements && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                Chest: {item.measurements.chest}", Shoulder: {item.measurements.shoulder}", Length: {item.measurements.length}"
+          <div className="space-y-6">
+            {/* Fabric Details (Ready Made Items) */}
+            {invoiceItems.some(item => item.type === 'ready_made') && (
+              <Card className="bg-white border-gray-200 shadow-lg">
+                <CardHeader className="bg-blue-50 border-b border-blue-200">
+                  <CardTitle className="text-gray-900 flex items-center">
+                    <ShoppingBag className="w-5 h-5 mr-2 text-blue-600" />
+                    Fabric Details
+                  </CardTitle>
+                  <CardDescription className="text-gray-600">
+                    Ready-made items and fabrics
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-blue-50">
+                          <TableHead className="text-gray-700 font-medium">विवरण / Description</TableHead>
+                          <TableHead className="text-gray-700 font-medium">मात्रा / Qty</TableHead>
+                          <TableHead className="text-gray-700 font-medium">दर / Rate</TableHead>
+                          <TableHead className="text-gray-700 font-medium">रकम / Amount</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoiceItems.filter(item => item.type === 'ready_made').map((item) => (
+                          <TableRow key={item.id} className="border-gray-200 hover:bg-blue-50">
+                            <TableCell className="text-gray-900">
+                              <div className="font-medium">{item.description}</div>
+                              {item.hsn_code && (
+                                <div className="text-xs text-gray-500 mt-1">HSN: {item.hsn_code}</div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 1)}
+                                className="w-20 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                              />
+                            </TableCell>
+                            <TableCell className="text-gray-900 font-medium">₹{item.unit_price.toFixed(2)}</TableCell>
+                            <TableCell className="text-gray-900 font-bold">₹{item.total_price.toFixed(2)}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeItem(item.id)}
+                                className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Stitching Details (Custom Stitching Items) */}
+            {invoiceItems.some(item => item.type === 'stitching') && (
+              <Card className="bg-white border-gray-200 shadow-lg">
+                <CardHeader className="bg-green-50 border-b border-green-200">
+                  <CardTitle className="text-gray-900 flex items-center">
+                    <Scissors className="w-5 h-5 mr-2 text-green-600" />
+                    Stitching Details
+                  </CardTitle>
+                  <CardDescription className="text-gray-600">
+                    Custom stitching services and measurements
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-green-50">
+                          <TableHead className="text-gray-700 font-medium">विवरण / Description</TableHead>
+                          <TableHead className="text-gray-700 font-medium">मात्रा / Qty</TableHead>
+                          <TableHead className="text-gray-700 font-medium">दर / Rate</TableHead>
+                          <TableHead className="text-gray-700 font-medium">रकम / Amount</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoiceItems.filter(item => item.type === 'stitching').map((item) => (
+                          <TableRow key={item.id} className="border-gray-200 hover:bg-green-50">
+                            <TableCell className="text-gray-900">
+                              <div>
+                                <div className="font-medium">{item.description}</div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                                    {item.clothingType?.replace('_', ' ').toUpperCase()}
+                                  </Badge>
+                                </div>
+                                {item.measurements && item.clothingType && (
+                                  <div className="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded">
+                                    <strong>Measurements:</strong><br />
+                                    {getMeasurementFields(item.clothingType)
+                                      .filter(field => item.measurements![field as keyof typeof item.measurements])
+                                      .map(field => `${getMeasurementLabel(field)}: ${item.measurements![field as keyof typeof item.measurements]}"`)
+                                      .join(', ')}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={item.type === 'ready_made' ? 'default' : 'secondary'} className={
-                            item.type === 'ready_made' 
-                              ? 'bg-gray-900 hover:bg-gray-800 text-white' 
-                              : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                          }>
-                            {item.type === 'ready_made' ? 'Ready Made' : 'Custom Stitching'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-gray-600">{item.hsn_code || '-'}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 1)}
-                            className="w-20 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
-                          />
-                        </TableCell>
-                        <TableCell className="text-gray-900 font-medium">₹{item.unit_price.toFixed(2)}</TableCell>
-                        <TableCell className="text-gray-900 font-bold">₹{item.total_price.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeItem(item.id)}
-                            className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 1)}
+                                className="w-20 border-gray-300 focus:border-green-500 focus:ring-green-500"
+                              />
+                            </TableCell>
+                            <TableCell className="text-gray-900 font-medium">₹{item.unit_price.toFixed(2)}</TableCell>
+                            <TableCell className="text-gray-900 font-bold">₹{item.total_price.toFixed(2)}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeItem(item.id)}
+                                className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
 
         {/* Bills List */}
@@ -1084,60 +1674,102 @@ const Billing = () => {
                   <TableBody>
                     {invoices.map((invoice) => (
                       <TableRow key={invoice.id} className="border-gray-200 hover:bg-gray-50">
-                        <TableCell className="font-mono text-gray-900 font-medium">
+                        <TableCell className="text-gray-900 font-medium">
                           {invoice.invoice_number}
                         </TableCell>
                         <TableCell>
                           <div>
                             <div className="font-medium text-gray-900">{invoice.customer.name}</div>
-                            <div className="text-sm text-gray-500 flex items-center">
-                              <Phone className="w-3 h-3 mr-1" />
-                              {invoice.customer.mobile}
-                            </div>
+                            <div className="text-sm text-gray-600">{invoice.customer.mobile}</div>
                           </div>
                         </TableCell>
                         <TableCell className="text-gray-600">
-                          {new Date(invoice.created_at || '').toLocaleDateString()}
+                          {new Date(invoice.created_at || '').toLocaleDateString('en-IN')}
                         </TableCell>
                         <TableCell className="text-gray-900 font-bold">
                           ₹{invoice.total_amount.toFixed(2)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={
-                            invoice.status === 'paid' ? 'default' : 
-                            invoice.status === 'sent' ? 'secondary' : 'outline'
-                          } className={
-                            invoice.status === 'paid' ? 'bg-green-100 text-green-800 hover:bg-green-200' :
-                            invoice.status === 'sent' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' :
-                            'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                          }>
-                            {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                          </Badge>
+                          <Select
+                            value={invoice.status}
+                            onValueChange={(value: 'draft' | 'paid' | 'sent') => 
+                              updateInvoiceStatus(invoice.id, value)
+                            }
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="draft">
+                                <div className="flex items-center">
+                                  <div className="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
+                                  Draft
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="sent">
+                                <div className="flex items-center">
+                                  <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+                                  Sent
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="paid">
+                                <div className="flex items-center">
+                                  <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                  Paid
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
-                          <div className="flex space-x-2">
+                          <div className="flex items-center gap-2">
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => generatePDF(invoice)}
-                              title="Print Bill"
-                              className="text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                              title="View/Print Bill"
+                              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                             >
-                              <Printer className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => duplicateInvoice(invoice)}
+                              title="Duplicate Bill"
+                              className="text-green-600 hover:text-green-800 hover:bg-green-50"
+                            >
+                              <Copy className="w-4 h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => sendInvoiceNotification(invoice)}
                               title="Send Notification"
-                              className="text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                              className="text-purple-600 hover:text-purple-800 hover:bg-purple-50"
                             >
                               <Send className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteInvoice(invoice.id)}
+                              title="Delete Bill"
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
                     ))}
+                    {invoices.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          No bills found. Create your first bill to get started.
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </div>

@@ -12,7 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Database } from '@/integrations/supabase/types';
 import { 
   CreditCard, 
   Plus, 
@@ -52,7 +51,7 @@ interface Payment {
   payment_date: string;
   transaction_id?: string;
   notes?: string;
-  status?: 'completed' | 'pending' | 'failed';
+  status: 'completed' | 'pending' | 'failed';
   created_at: string;
   orders: {
     order_number: string;
@@ -117,14 +116,9 @@ const Payments: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterMethod, setFilterMethod] = useState('all');
   const [dueDateFilter, setDueDateFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
   
   // Dialog states
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
-  const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
-  const [isDeletePaymentOpen, setIsDeletePaymentOpen] = useState(false);
-  const [isViewPaymentOpen, setIsViewPaymentOpen] = useState(false);
   const [isRefundOpen, setIsRefundOpen] = useState(false);
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -147,98 +141,48 @@ const Payments: React.FC = () => {
     try {
       setLoading(true);
       
-      // Fetch payments with complete order and customer data
+      // Fetch payments
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select(`
           *,
-          orders!inner (
-            id,
+          orders (
             order_number,
             customer_id,
             total_amount,
             advance_amount,
             balance_amount,
-            due_date,
-            status,
-            created_at,
-            customers!inner (
-              id,
-              name,
-              mobile,
-              email,
-              address
-            )
+            customers (name, mobile, email)
           )
         `)
         .order('created_at', { ascending: false });
 
-      if (paymentsError) {
-        console.error('Payments fetch error:', paymentsError);
-        throw paymentsError;
-      }
+      if (paymentsError) throw paymentsError;
+      setPayments(paymentsData || []);
 
-      // Filter out any payments with null orders (data integrity)
-      const validPayments = paymentsData?.filter(payment => payment.orders) || [];
-      setPayments(validPayments);
-
-      // Fetch outstanding orders with customer data
+      // Fetch outstanding orders
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select(`
           *,
-          customers!inner (
-            id,
-            name,
-            mobile,
-            email,
-            address
-          )
+          customers (name, mobile, email)
         `)
         .gt('balance_amount', 0)
         .neq('status', 'cancelled')
-        .neq('status', 'delivered')
         .order('created_at', { ascending: false });
 
-      if (ordersError) {
-        console.error('Orders fetch error:', ordersError);
-        throw ordersError;
-      }
-
-      const validOrders = ordersData?.filter(order => order.customers) || [];
-      setOutstandingOrders(validOrders);
+      if (ordersError) throw ordersError;
+      setOutstandingOrders(ordersData || []);
 
       // Calculate statistics
-      calculateStats(validPayments, validOrders);
-      
-      // Show success message only on manual refresh
-      if (!loading) {
-        toast({
-          title: 'Success',
-          description: 'Data refreshed successfully',
-        });
-      }
+      calculateStats(paymentsData || [], ordersData || []);
       
     } catch (error: any) {
       console.error('Error fetching data:', error);
       toast({
         title: 'Error',
-        description: `Failed to fetch payment data: ${error.message}`,
+        description: 'Failed to fetch payment data',
         variant: 'destructive',
-      });
-      
-      // Set empty arrays on error to prevent UI crashes
-      setPayments([]);
-      setOutstandingOrders([]);
-      setPaymentStats({
-        totalRevenue: 0,
-        pendingPayments: 0,
-        collectedToday: 0,
-        collectedThisMonth: 0,
-        totalTransactions: 0,
-        overduePayments: 0,
-        cashPayments: 0,
-        onlinePayments: 0
       });
     } finally {
       setLoading(false);
@@ -287,378 +231,71 @@ const Payments: React.FC = () => {
 
   const handleAddPayment = async () => {
     try {
-      if (!selectedOrder || !paymentForm.amount || !user?.id) {
+      if (!selectedOrder || !paymentForm.amount) {
         toast({
           title: 'Error',
-          description: 'Please select an order, enter payment amount, and ensure you are logged in',
+          description: 'Please select an order and enter payment amount',
           variant: 'destructive',
         });
         return;
       }
 
-      if (paymentForm.amount <= 0) {
-        toast({
-          title: 'Error',
-          description: 'Payment amount must be greater than 0',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (paymentForm.amount > selectedOrder.balance_amount) {
-        toast({
-          title: 'Error',
-          description: 'Payment amount cannot exceed the balance due',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setLoading(true);
-
-      // Use Supabase transaction to ensure data consistency
-      const { data: paymentData, error: paymentError } = await supabase
+      const { error: paymentError } = await supabase
         .from('payments')
         .insert({
           order_id: selectedOrder.id,
           amount: paymentForm.amount,
           payment_method: paymentForm.payment_method,
-          transaction_id: paymentForm.transaction_id || null,
-          notes: paymentForm.notes || null,
+          transaction_id: paymentForm.transaction_id,
+          notes: paymentForm.notes,
           status: 'completed',
-          payment_date: new Date().toISOString(),
-          created_by: user.id,
-        })
-        .select('*')
-        .single();
+          created_by: user?.id,
+        });
 
-      if (paymentError) {
-        console.error('Payment insert error:', paymentError);
-        throw paymentError;
-      }
+      if (paymentError) throw paymentError;
 
-      // Calculate new order amounts
+      // Update order balance
       const newAdvanceAmount = selectedOrder.advance_amount + paymentForm.amount;
       const newBalanceAmount = selectedOrder.total_amount - newAdvanceAmount;
-      const newStatus = newBalanceAmount <= 0 ? ('delivered' as const) : selectedOrder.status;
 
-      // Update order balance and status
-      const statusUpdate = newBalanceAmount <= 0 ? 'delivered' : selectedOrder.status;
       const { error: orderError } = await supabase
         .from('orders')
         .update({
           advance_amount: newAdvanceAmount,
           balance_amount: newBalanceAmount,
-          status: statusUpdate as Database['public']['Enums']['order_status'],
-          updated_at: new Date().toISOString(),
         })
         .eq('id', selectedOrder.id);
 
-      if (orderError) {
-        console.error('Order update error:', orderError);
-        // Rollback payment if order update fails
-        await supabase.from('payments').delete().eq('id', paymentData.id);
-        throw orderError;
-      }
+      if (orderError) throw orderError;
 
       toast({
         title: 'Success',
-        description: `Payment of ${formatCurrency(paymentForm.amount)} recorded successfully`,
+        description: 'Payment recorded successfully',
       });
 
-      // Reset form and close dialog
       setIsAddPaymentOpen(false);
-      resetForms();
-      
-      // Data will be refreshed automatically via real-time subscription
+      setPaymentForm({
+        order_id: '',
+        amount: 0,
+        payment_method: 'cash',
+        transaction_id: '',
+        notes: ''
+      });
+      setSelectedOrder(null);
+      fetchData();
       
     } catch (error: any) {
       console.error('Error adding payment:', error);
       toast({
         title: 'Error',
-        description: `Failed to record payment: ${error.message}`,
+        description: 'Failed to record payment',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
-  };
-
-  // CRUD Operations
-  
-  // READ - View Payment Details
-  const handleViewPayment = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setIsViewPaymentOpen(true);
-  };
-
-  // UPDATE - Edit Payment
-  const handleEditPayment = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setPaymentForm({
-      order_id: payment.order_id,
-      amount: payment.amount,
-      payment_method: payment.payment_method,
-      transaction_id: payment.transaction_id || '',
-      notes: payment.notes || ''
-    });
-    setIsEditPaymentOpen(true);
-  };
-
-  const handleUpdatePayment = async () => {
-    try {
-      if (!selectedPayment || !paymentForm.amount || paymentForm.amount <= 0) {
-        toast({
-          title: 'Error',
-          description: 'Please enter a valid payment amount',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (!user?.id) {
-        toast({
-          title: 'Error',
-          description: 'User authentication required',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setLoading(true);
-
-      // Calculate the difference in payment amount
-      const amountDifference = paymentForm.amount - selectedPayment.amount;
-
-      const { error: paymentError } = await supabase
-        .from('payments')
-        .update({
-          amount: paymentForm.amount,
-          payment_method: paymentForm.payment_method,
-          transaction_id: paymentForm.transaction_id || null,
-          notes: paymentForm.notes || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', selectedPayment.id);
-
-      if (paymentError) {
-        console.error('Payment update error:', paymentError);
-        throw paymentError;
-      }
-
-      // Update order balance if amount changed
-      if (amountDifference !== 0) {
-        const { data: orderData, error: orderFetchError } = await supabase
-          .from('orders')
-          .select('advance_amount, total_amount, status')
-          .eq('id', selectedPayment.order_id)
-          .single();
-
-        if (orderFetchError) {
-          console.error('Order fetch error:', orderFetchError);
-          throw orderFetchError;
-        }
-
-        const newAdvanceAmount = orderData.advance_amount + amountDifference;
-        const newBalanceAmount = orderData.total_amount - newAdvanceAmount;
-        const newStatus = newBalanceAmount <= 0 ? 'delivered' as const : orderData.status;
-
-        if (newAdvanceAmount < 0) {
-          toast({
-            title: 'Error',
-            description: 'Payment amount would result in negative advance amount',
-            variant: 'destructive',
-          });
-          return;
-        }
-
-        const { error: orderUpdateError } = await supabase
-          .from('orders')
-          .update({
-            advance_amount: newAdvanceAmount,
-            balance_amount: newBalanceAmount,
-            status: newStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', selectedPayment.order_id);
-
-        if (orderUpdateError) {
-          console.error('Order update error:', orderUpdateError);
-          throw orderUpdateError;
-        }
-      }
-
-      toast({
-        title: 'Success',
-        description: `Payment updated successfully`,
-      });
-
-      setIsEditPaymentOpen(false);
-      setSelectedPayment(null);
-      resetForms();
-      
-      // Data will be refreshed automatically via real-time subscription
-      
-    } catch (error: any) {
-      console.error('Error updating payment:', error);
-      toast({
-        title: 'Error',
-        description: `Failed to update payment: ${error.message}`,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // DELETE - Delete Payment
-  const handleDeletePayment = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setIsDeletePaymentOpen(true);
-  };
-
-  const confirmDeletePayment = async () => {
-    try {
-      if (!selectedPayment) {
-        toast({
-          title: 'Error',
-          description: 'No payment selected for deletion',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (!user?.id) {
-        toast({
-          title: 'Error',
-          description: 'User authentication required',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      setLoading(true);
-
-      // Get current order data for balance calculation
-      const { data: orderData, error: orderFetchError } = await supabase
-        .from('orders')
-        .select('advance_amount, total_amount, status')
-        .eq('id', selectedPayment.order_id)
-        .single();
-
-      if (orderFetchError) {
-        console.error('Order fetch error:', orderFetchError);
-        throw orderFetchError;
-      }
-
-      // Delete the payment record
-      const { error: paymentError } = await supabase
-        .from('payments')
-        .delete()
-        .eq('id', selectedPayment.id);
-
-      if (paymentError) {
-        console.error('Payment delete error:', paymentError);
-        throw paymentError;
-      }
-
-      // Update order balance by subtracting the deleted payment amount
-      const newAdvanceAmount = Math.max(0, orderData.advance_amount - selectedPayment.amount);
-      const newBalanceAmount = orderData.total_amount - newAdvanceAmount;
-      const newStatus = newBalanceAmount > 0 ? 'pending' as const : orderData.status;
-
-      const { error: orderUpdateError } = await supabase
-        .from('orders')
-        .update({
-          advance_amount: newAdvanceAmount,
-          balance_amount: newBalanceAmount,
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', selectedPayment.order_id);
-
-      if (orderUpdateError) {
-        console.error('Order update error:', orderUpdateError);
-        throw orderUpdateError;
-      }
-
-      toast({
-        title: 'Success',
-        description: `Payment of ${formatCurrency(selectedPayment.amount)} deleted successfully`,
-      });
-
-      setIsDeletePaymentOpen(false);
-      setSelectedPayment(null);
-      
-      // Data will be refreshed automatically via real-time subscription
-      
-    } catch (error: any) {
-      console.error('Error deleting payment:', error);
-      toast({
-        title: 'Error',
-        description: `Failed to delete payment: ${error.message}`,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Utility function to reset forms
-  const resetForms = () => {
-    setPaymentForm({
-      order_id: '',
-      amount: 0,
-      payment_method: 'cash',
-      transaction_id: '',
-      notes: ''
-    });
-    setSelectedOrder(null);
-    setSelectedPayment(null);
   };
 
   useEffect(() => {
     fetchData();
-    
-    // Real-time subscription for payments
-    const paymentsSubscription = supabase
-      .channel('payments_channel')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'payments' 
-        }, 
-        (payload) => {
-          console.log('Payment change received:', payload);
-          // Refresh data when payments change
-          fetchData();
-        }
-      )
-      .subscribe();
-
-    // Real-time subscription for orders
-    const ordersSubscription = supabase
-      .channel('orders_channel')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'orders' 
-        }, 
-        (payload) => {
-          console.log('Order change received:', payload);
-          // Refresh data when orders change
-          fetchData();
-        }
-      )
-      .subscribe();
-
-    // Cleanup subscriptions on unmount
-    return () => {
-      supabase.removeChannel(paymentsSubscription);
-      supabase.removeChannel(ordersSubscription);
-    };
   }, []);
 
   if (loading) {
@@ -679,9 +316,9 @@ const Payments: React.FC = () => {
         <div className="backdrop-blur-xl bg-gradient-to-r from-white/95 via-purple-50/90 to-blue-50/95 border-2 border-purple-200/50 rounded-3xl shadow-2xl p-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
             <div className="space-y-4">
-              <h1 className="text-3xl font-bold text-black flex items-center gap-4">
+              <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-4">
                 <div className="p-4 bg-gradient-to-r from-purple-500 via-blue-500 to-indigo-500 rounded-2xl shadow-xl">
-                  <Wallet className="h-12 w-12 text-black" />
+                  <Wallet className="h-12 w-12 text-white" />
                 </div>
                 Payment Management Center
               </h1>
@@ -715,22 +352,22 @@ const Payments: React.FC = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="bg-gradient-to-r from-purple-100/80 to-blue-100/80 p-6">
               <TabsList className="grid w-full grid-cols-6 bg-white/50 backdrop-blur-sm rounded-2xl p-2">
-                <TabsTrigger value="dashboard" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="dashboard" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-500 data-[state=active]:text-white rounded-xl font-semibold">
                   Dashboard
                 </TabsTrigger>
-                <TabsTrigger value="history" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="history" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white rounded-xl font-semibold">
                   Payment History
                 </TabsTrigger>
-                <TabsTrigger value="collect" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="collect" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white rounded-xl font-semibold">
                   Collect Payment
                 </TabsTrigger>
-                <TabsTrigger value="due" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-pink-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="due" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-pink-500 data-[state=active]:text-white rounded-xl font-semibold">
                   Due Payments
                 </TabsTrigger>
-                <TabsTrigger value="refunds" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-yellow-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="refunds" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white rounded-xl font-semibold">
                   Refunds
                 </TabsTrigger>
-                <TabsTrigger value="reports" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="reports" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white rounded-xl font-semibold">
                   Reports
                 </TabsTrigger>
               </TabsList>
@@ -747,7 +384,7 @@ const Payments: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-green-700 font-bold">Total Revenue</CardTitle>
                       <div className="p-3 bg-green-500 rounded-xl">
-                        <DollarSign className="h-6 w-6 text-black" />
+                        <DollarSign className="h-6 w-6 text-white" />
                       </div>
                     </div>
                   </CardHeader>
@@ -765,7 +402,7 @@ const Payments: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-red-700 font-bold">Pending Payments</CardTitle>
                       <div className="p-3 bg-red-500 rounded-xl">
-                        <AlertCircle className="h-6 w-6 text-black" />
+                        <AlertCircle className="h-6 w-6 text-white" />
                       </div>
                     </div>
                   </CardHeader>
@@ -783,7 +420,7 @@ const Payments: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-blue-700 font-bold">Collected Today</CardTitle>
                       <div className="p-3 bg-blue-500 rounded-xl">
-                        <Calendar className="h-6 w-6 text-black" />
+                        <Calendar className="h-6 w-6 text-white" />
                       </div>
                     </div>
                   </CardHeader>
@@ -798,7 +435,7 @@ const Payments: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-purple-700 font-bold">This Month</CardTitle>
                       <div className="p-3 bg-purple-500 rounded-xl">
-                        <TrendingUp className="h-6 w-6 text-black" />
+                        <TrendingUp className="h-6 w-6 text-white" />
                       </div>
                     </div>
                   </CardHeader>
@@ -874,17 +511,11 @@ const Payments: React.FC = () => {
                     <Input
                       placeholder="Search payments..."
                       value={searchTerm}
-                      onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        setCurrentPage(1); // Reset to first page when searching
-                      }}
+                      onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10 w-64"
                     />
                   </div>
-                  <Select value={filterMethod} onValueChange={(value) => {
-                    setFilterMethod(value);
-                    setCurrentPage(1); // Reset to first page when filtering
-                  }}>
+                  <Select value={filterMethod} onValueChange={setFilterMethod}>
                     <SelectTrigger className="w-40">
                       <SelectValue placeholder="Filter by method" />
                     </SelectTrigger>
@@ -913,24 +544,16 @@ const Payments: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(() => {
-                      // Filter payments
-                      const filteredPayments = payments.filter(payment => 
+                    {payments
+                      .filter(payment => 
                         (filterMethod === 'all' || payment.payment_method === filterMethod) &&
                         (searchTerm === '' || 
                          payment.orders?.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          payment.orders?.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase())
                         )
-                      );
-
-                      // Calculate pagination
-                      const totalItems = filteredPayments.length;
-                      const totalPages = Math.ceil(totalItems / itemsPerPage);
-                      const startIndex = (currentPage - 1) * itemsPerPage;
-                      const endIndex = startIndex + itemsPerPage;
-                      const currentItems = filteredPayments.slice(startIndex, endIndex);
-
-                      return currentItems.map((payment) => (
+                      )
+                      .slice(0, 10)
+                      .map((payment) => (
                         <TableRow key={payment.id}>
                           <TableCell className="font-medium">{payment.orders?.order_number}</TableCell>
                           <TableCell>{payment.orders?.customers?.name}</TableCell>
@@ -951,127 +574,18 @@ const Payments: React.FC = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => handleViewPayment(payment)}
-                                className="hover:bg-blue-50"
-                              >
+                              <Button size="sm" variant="outline">
                                 <Eye className="h-4 w-4" />
                               </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleEditPayment(payment)}
-                                className="hover:bg-green-50"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleDeletePayment(payment)}
-                                className="hover:bg-red-50 text-red-600"
-                              >
-                                <AlertCircle className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                className="hover:bg-purple-50"
-                              >
+                              <Button size="sm" variant="outline">
                                 <Download className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
                         </TableRow>
-                      ));
-                    })()}
+                      ))}
                   </TableBody>
                 </Table>
-
-                {/* Pagination Controls */}
-                {(() => {
-                  const filteredPayments = payments.filter(payment => 
-                    (filterMethod === 'all' || payment.payment_method === filterMethod) &&
-                    (searchTerm === '' || 
-                     payment.orders?.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                     payment.orders?.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-                    )
-                  );
-                  const totalItems = filteredPayments.length;
-                  const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-                  if (totalPages <= 1) return null;
-
-                  return (
-                    <div className="flex items-center justify-between p-6 border-t">
-                      <div className="text-sm text-gray-600">
-                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} payments
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {/* Previous Button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          disabled={currentPage === 1}
-                          className="px-3"
-                        >
-                          Previous
-                        </Button>
-
-                        {/* Page Numbers */}
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => {
-                            // Show first page, last page, current page, and pages around current
-                            const showPage = pageNum === 1 || 
-                                           pageNum === totalPages || 
-                                           Math.abs(pageNum - currentPage) <= 1;
-                            
-                            if (!showPage && pageNum === 2 && currentPage > 4) {
-                              return <span key={pageNum} className="px-2 text-gray-400">...</span>;
-                            }
-                            
-                            if (!showPage && pageNum === totalPages - 1 && currentPage < totalPages - 3) {
-                              return <span key={pageNum} className="px-2 text-gray-400">...</span>;
-                            }
-                            
-                            if (!showPage) return null;
-
-                            return (
-                              <Button
-                                key={pageNum}
-                                variant={currentPage === pageNum ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setCurrentPage(pageNum)}
-                                className={`min-w-[40px] h-10 ${
-                                  currentPage === pageNum 
-                                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white' 
-                                    : 'hover:bg-purple-50'
-                                }`}
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          })}
-                        </div>
-
-                        {/* Next Button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                          disabled={currentPage === totalPages}
-                          className="px-3"
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })()}
               </Card>
             </TabsContent>
 
@@ -1197,7 +711,7 @@ const Payments: React.FC = () => {
 
                       <Button 
                         onClick={handleAddPayment}
-                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-black font-bold py-3"
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-3"
                         disabled={!selectedOrder || !paymentForm.amount}
                       >
                         <CheckCircle className="h-5 w-5 mr-2" />
@@ -1236,7 +750,7 @@ const Payments: React.FC = () => {
                           <CardTitle className="text-red-800">{order.order_number}</CardTitle>
                           <CardDescription className="text-red-600">{order.customers?.name}</CardDescription>
                         </div>
-                        <Badge className="bg-red-500 text-black">Due</Badge>
+                        <Badge className="bg-red-500 text-white">Due</Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -1487,226 +1001,13 @@ const Payments: React.FC = () => {
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => {
-                  setIsAddPaymentOpen(false);
-                  resetForms();
-                }}
+                onClick={() => setIsAddPaymentOpen(false)}
                 className="flex-1"
               >
                 Cancel
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Payment Dialog */}
-      <Dialog open={isViewPaymentOpen} onOpenChange={setIsViewPaymentOpen}>
-        <DialogContent className="max-w-2xl bg-gradient-to-br from-white to-blue-50 border-2 border-blue-200/50">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-blue-800">Payment Details</DialogTitle>
-            <DialogDescription>View payment transaction information</DialogDescription>
-          </DialogHeader>
-          {selectedPayment && (
-            <div className="space-y-6">
-              <div className="grid gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <h3 className="font-bold text-blue-800 mb-3">Transaction Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-gray-600 text-sm">Payment ID:</span>
-                      <p className="font-semibold">{selectedPayment.id}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 text-sm">Order Number:</span>
-                      <p className="font-semibold">{selectedPayment.orders?.order_number}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 text-sm">Customer:</span>
-                      <p className="font-semibold">{selectedPayment.orders?.customers?.name}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 text-sm">Amount:</span>
-                      <p className="font-bold text-green-600">{formatCurrency(selectedPayment.amount)}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 text-sm">Payment Method:</span>
-                      <p className="font-semibold capitalize">{selectedPayment.payment_method}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600 text-sm">Payment Date:</span>
-                      <p className="font-semibold">{new Date(selectedPayment.payment_date).toLocaleDateString()}</p>
-                    </div>
-                    {selectedPayment.transaction_id && (
-                      <div className="col-span-2">
-                        <span className="text-gray-600 text-sm">Transaction ID:</span>
-                        <p className="font-semibold">{selectedPayment.transaction_id}</p>
-                      </div>
-                    )}
-                    {selectedPayment.notes && (
-                      <div className="col-span-2">
-                        <span className="text-gray-600 text-sm">Notes:</span>
-                        <p className="font-semibold">{selectedPayment.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <Button 
-                onClick={() => setIsViewPaymentOpen(false)}
-                className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
-              >
-                Close
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Payment Dialog */}
-      <Dialog open={isEditPaymentOpen} onOpenChange={setIsEditPaymentOpen}>
-        <DialogContent className="max-w-2xl bg-gradient-to-br from-white to-green-50 border-2 border-green-200/50">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-green-800">Edit Payment</DialogTitle>
-            <DialogDescription>Update payment transaction details</DialogDescription>
-          </DialogHeader>
-          {selectedPayment && (
-            <div className="space-y-6">
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <h3 className="font-bold text-green-800 mb-2">Payment Information</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Order:</span>
-                    <p className="font-semibold">{selectedPayment.orders?.order_number}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Customer:</span>
-                    <p className="font-semibold">{selectedPayment.orders?.customers?.name}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Amount</Label>
-                    <Input
-                      type="number"
-                      value={paymentForm.amount || ''}
-                      onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                  <div>
-                    <Label>Payment Method</Label>
-                    <Select value={paymentForm.payment_method} onValueChange={(value) => setPaymentForm(prev => ({ ...prev, payment_method: value as Payment['payment_method'] }))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="upi">UPI</SelectItem>
-                        <SelectItem value="card">Card</SelectItem>
-                        <SelectItem value="credit">Credit</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Transaction ID (Optional)</Label>
-                  <Input
-                    value={paymentForm.transaction_id}
-                    onChange={(e) => setPaymentForm(prev => ({ ...prev, transaction_id: e.target.value }))}
-                    placeholder="Enter transaction reference"
-                  />
-                </div>
-
-                <div>
-                  <Label>Notes</Label>
-                  <Textarea
-                    value={paymentForm.notes}
-                    onChange={(e) => setPaymentForm(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Add notes..."
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Button 
-                  onClick={handleUpdatePayment}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
-                  disabled={!paymentForm.amount}
-                >
-                  Update Payment
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setIsEditPaymentOpen(false);
-                    resetForms();
-                  }}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Payment Dialog */}
-      <Dialog open={isDeletePaymentOpen} onOpenChange={setIsDeletePaymentOpen}>
-        <DialogContent className="max-w-md bg-gradient-to-br from-white to-red-50 border-2 border-red-200/50">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-red-800">Delete Payment</DialogTitle>
-            <DialogDescription>Are you sure you want to delete this payment?</DialogDescription>
-          </DialogHeader>
-          {selectedPayment && (
-            <div className="space-y-6">
-              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                <h3 className="font-bold text-red-800 mb-2">Payment Details</h3>
-                <div className="space-y-2 text-sm">
-                  <p><span className="text-gray-600">Order:</span> <span className="font-semibold">{selectedPayment.orders?.order_number}</span></p>
-                  <p><span className="text-gray-600">Customer:</span> <span className="font-semibold">{selectedPayment.orders?.customers?.name}</span></p>
-                  <p><span className="text-gray-600">Amount:</span> <span className="font-bold text-red-600">{formatCurrency(selectedPayment.amount)}</span></p>
-                  <p><span className="text-gray-600">Date:</span> <span className="font-semibold">{new Date(selectedPayment.payment_date).toLocaleDateString()}</span></p>
-                </div>
-              </div>
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                  <div className="text-sm text-yellow-800">
-                    <p className="font-semibold">Warning!</p>
-                    <p>This action cannot be undone. The payment will be permanently removed and the order balance will be updated.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Button 
-                  onClick={confirmDeletePayment}
-                  variant="destructive"
-                  className="flex-1"
-                >
-                  Delete Payment
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setIsDeletePaymentOpen(false);
-                    setSelectedPayment(null);
-                  }}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
     </div>
