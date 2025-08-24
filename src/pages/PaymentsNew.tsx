@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/pagination';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { LoadingCard, LoadingTable, LoadingStats, LoadingButton } from '@/components/ui/loading';
 import { 
   CreditCard, 
   Plus, 
@@ -84,10 +83,23 @@ interface Order {
 }
 
 const Payments: React.FC = () => {
-  // Restore missing states and helpers
+  const { user, profile } = useAuth();
+  
+  // State management
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [outstandingOrders, setOutstandingOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [methodFilter, setMethodFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // Payment statistics
   const [paymentStats, setPaymentStats] = useState({
     totalPayments: 0,
     totalAmount: 0,
@@ -97,82 +109,14 @@ const Payments: React.FC = () => {
     thisWeekPayments: 0,
     thisMonthPayments: 0
   });
-  // Pagination helpers
-  // Use only one set of these variables
-  // ...existing code...
-  const { user, profile } = useAuth();
-  
-  // State management
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [outstandingOrders, setOutstandingOrders] = useState<Order[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [methodFilter, setMethodFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
-  const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Form state
   const [paymentForm, setPaymentForm] = useState({
     order_id: '',
     amount: 0,
     payment_method: 'cash' as Payment['payment_method'],
     notes: '',
   });
-
-  // Single pagination block used by the component
-  const filteredPayments = payments.filter(payment => {
-    const matchesSearch = searchTerm === '' || 
-      payment.orders?.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.orders?.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesMethod = methodFilter === 'all' || payment.payment_method === methodFilter;
-    return matchesSearch && matchesMethod;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredPayments.length / itemsPerPage));
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentPayments = filteredPayments.slice(startIndex, endIndex);
-  const renderPaginationItems = () => {
-    const items = [];
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-    items.push(
-      <PaginationItem key="prev">
-        <PaginationPrevious 
-          onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-        />
-      </PaginationItem>
-    );
-    for (let i = startPage; i <= endPage; i++) {
-      items.push(
-        <PaginationItem key={i}>
-          <PaginationLink 
-            onClick={() => setCurrentPage(i)}
-            isActive={currentPage === i}
-            className="cursor-pointer"
-          >
-            {i}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    }
-    items.push(
-      <PaginationItem key="next">
-        <PaginationNext 
-          onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
-          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-        />
-      </PaginationItem>
-    );
-    return items;
-  };
-  
 
   useEffect(() => {
     fetchPayments();
@@ -264,8 +208,6 @@ const Payments: React.FC = () => {
   };
 
   const fetchPayments = async () => {
-    setLoading(true);
-    setIsStatsLoading(true);
     try {
       const { data, error } = await supabase
         .from('payments')
@@ -291,9 +233,6 @@ const Payments: React.FC = () => {
         description: 'Failed to fetch payments',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
-      setIsStatsLoading(false);
     }
   };
 
@@ -313,6 +252,8 @@ const Payments: React.FC = () => {
       setOutstandingOrders(data || []);
     } catch (error: any) {
       console.error('Error fetching outstanding orders:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -404,20 +345,74 @@ const Payments: React.FC = () => {
     }
   };
 
-  const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const totalOutstanding = outstandingOrders.reduce((sum, order) => sum + order.balance_amount, 0);
+  // Filter payments
+  const filteredPayments = payments.filter(payment => {
+    const matchesSearch = searchTerm === '' || 
+      payment.orders?.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.orders?.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesMethod = methodFilter === 'all' || payment.payment_method === methodFilter;
+    
+    return matchesSearch && matchesMethod;
+  });
 
-  const formatCurrency = (amount: number) => {
-    return `₹${amount.toLocaleString('en-IN')}`;
+  // Pagination logic
+  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPayments = filteredPayments.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
+  const renderPaginationItems = () => {
+    const items = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // Previous button
+    items.push(
+      <PaginationItem key="prev">
+        <PaginationPrevious 
+          onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+        />
+      </PaginationItem>
     );
-  }
+
+    // Page numbers
+    for (let i = startPage; i <= endPage; i++) {
+      items.push(
+        <PaginationItem key={i}>
+          <PaginationLink 
+            onClick={() => handlePageChange(i)}
+            isActive={currentPage === i}
+            className="cursor-pointer"
+          >
+            {i}
+          </PaginationLink>
+        </PaginationItem>
+      );
+    }
+
+    // Next button
+    items.push(
+      <PaginationItem key="next">
+        <PaginationNext 
+          onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
+          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+        />
+      </PaginationItem>
+    );
+
+    return items;
+  };
 
   return (
     <div className="space-y-6">
@@ -446,65 +441,57 @@ const Payments: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
-            <div className="p-2 rounded-full bg-emerald-100 animate-pulse">
-              <Receipt className="h-4 w-4 text-emerald-600" />
+      {/* Payment Statistics */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-emerald-800">Total Payments</p>
+                <p className="text-2xl font-bold text-emerald-900">₹{paymentStats.totalAmount.toLocaleString()}</p>
+                <p className="text-xs text-emerald-600">{paymentStats.totalPayments} transactions</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-emerald-600" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalPayments)}</div>
-            <p className="text-xs text-muted-foreground">
-              All time payments
-            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding</CardTitle>
-            <div className="p-2 rounded-full bg-orange-100 animate-pulse">
-              <AlertCircle className="h-4 w-4 text-orange-600" />
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-800">Pending Amount</p>
+                <p className="text-2xl font-bold text-orange-900">₹{paymentStats.pendingAmount.toLocaleString()}</p>
+                <p className="text-xs text-orange-600">Outstanding balances</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-600" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{formatCurrency(totalOutstanding)}</div>
-            <p className="text-xs text-muted-foreground">
-              Pending collections
-            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Orders Due</CardTitle>
-            <div className="p-2 rounded-full bg-purple-100 animate-pulse">
-              <Clock className="h-4 w-4 text-purple-600" />
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-red-800">Overdue Amount</p>
+                <p className="text-2xl font-bold text-red-900">₹{paymentStats.overdueAmount.toLocaleString()}</p>
+                <p className="text-xs text-red-600">Past due date</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-red-600" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{outstandingOrders.length}</div>
-            <p className="text-xs text-muted-foreground">
-              With pending balance
-            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Payment Count</CardTitle>
-            <div className="p-2 rounded-full bg-blue-100 animate-pulse">
-              <CheckCircle className="h-4 w-4 text-blue-600" />
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-800">This Month</p>
+                <p className="text-2xl font-bold text-blue-900">₹{paymentStats.thisMonthPayments.toLocaleString()}</p>
+                <p className="text-xs text-blue-600">Monthly revenue</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-blue-600" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{payments.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Total transactions
-            </p>
           </CardContent>
         </Card>
       </div>

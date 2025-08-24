@@ -14,13 +14,16 @@ import {
   Clock,
   Eye,
   RefreshCw,
-  Calendar
+  Calendar,
+  AlertTriangle,
+  CreditCard,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { LoadingSpinner, LoadingCard, LoadingStats } from '@/components/ui/loading';
-
 const Dashboard = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -34,114 +37,114 @@ const Dashboard = () => {
     monthlyRevenue: 0,
     pendingDeliveries: 0,
     overdueTasks: 0,
-    todayDue: 0
+    todayDue: 0,
+    totalPayments: 0,
+    pendingPayments: 0,
+    overduePayments: 0
   });
   const [recentActivities, setRecentActivities] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
-
-  useEffect(() => {
-    fetchDashboardData();
-    
-    // Set up real-time subscriptions
-    const ordersSubscription = supabase
-      .channel('orders_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        fetchDashboardData();
-      })
-      .subscribe();
-
-    const customersSubscription = supabase
-      .channel('customers_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () => {
-        fetchDashboardData();
-      })
-      .subscribe();
-
-    const paymentsSubscription = supabase
-      .channel('payments_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => {
-        fetchDashboardData();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(ordersSubscription);
-      supabase.removeChannel(customersSubscription);
-      supabase.removeChannel(paymentsSubscription);
-    };
-  }, []);
+  const [paymentAlerts, setPaymentAlerts] = useState([]);
 
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      // Fetch total customers
-      const { data: customers, error: customersError } = await supabase
-        .from('customers')
-        .select('id, created_at');
-      
-      if (customersError) throw customersError;
 
-      // Fetch orders with details
+      // Fetch orders (newest first)
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
-        .select(`
-          id, 
-          status, 
-          total_amount, 
-          due_date, 
-          created_at,
-          customer_id
-        `);
-      
+        .select('*')
+        .order('created_at', { ascending: false });
       if (ordersError) throw ordersError;
 
       // Fetch customers for names
       const { data: customersData, error: customersDataError } = await supabase
         .from('customers')
-        .select('id, name');
-      
+        .select('id, name, created_at');
       if (customersDataError) throw customersDataError;
 
-      // Create customer lookup map
-      const customerMap = customersData?.reduce((acc, customer) => {
+      const customerMap = (customersData || []).reduce((acc: any, customer: any) => {
         acc[customer.id] = customer.name;
         return acc;
-      }, {}) || {};
+      }, {});
 
-      // Fetch payments for revenue calculation
+      // Payments for month
       const currentMonth = new Date();
       const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-      
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount, created_at')
         .gte('created_at', firstDayOfMonth.toISOString());
-      
       if (paymentsError) throw paymentsError;
 
-      // Calculate statistics
-      const totalCustomers = customers?.length || 0;
-      
-      const activeOrders = orders?.filter(order => 
-        ['pending', 'in_progress', 'ready'].includes(order.status)
-      ).length || 0;
+      // Payments detailed
+      const { data: paymentsDetailed, error: paymentsDetailedError } = await supabase
+        .from('payments')
+        .select(`
+          id,
+          amount,
+          payment_date,
+          created_at,
+          order_id,
+          orders!inner(
+            id,
+            order_number,
+            total_amount,
+            advance_amount,
+            due_date,
+            customer_id
+          )
+        `);
+      if (paymentsDetailedError) throw paymentsDetailedError;
 
-      const monthlyRevenue = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+      const totalCustomers = (customersData || []).length;
+      const activeOrders = (orders || []).filter((o: any) => ['pending', 'in_progress', 'ready'].includes(o.status)).length;
+      const monthlyRevenue = (payments || []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
       const today = new Date();
       const todayDate = today.toISOString().split('T')[0];
-      
-      const pendingDeliveries = orders?.filter(order => 
-        order.status === 'ready' || order.due_date <= todayDate
-      ).length || 0;
 
-      const overdueTasks = orders?.filter(order => 
-        order.due_date < todayDate && order.status !== 'delivered'
-      ).length || 0;
+      const pendingDeliveries = (orders || []).filter((order: any) => order.status === 'ready' || (order.due_date && order.due_date <= todayDate)).length;
+      const overdueTasks = (orders || []).filter((order: any) => order.due_date && order.due_date < todayDate && order.status !== 'delivered').length;
+      const todayDue = (orders || []).filter((order: any) => order.due_date === todayDate && order.status !== 'delivered').length;
 
-      const todayDue = orders?.filter(order => 
-        order.due_date === todayDate && order.status !== 'delivered'
-      ).length || 0;
+      const totalPayments = (paymentsDetailed || []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+      const ordersWithBalance = (orders || []).filter((order: any) => (order.total_amount - (order.advance_amount || 0)) > 0 && order.status !== 'cancelled');
+      const pendingPayments = ordersWithBalance.reduce((sum: number, order: any) => sum + (order.total_amount - (order.advance_amount || 0)), 0);
+      const overduePayments = ordersWithBalance.filter((o: any) => o.due_date && o.due_date < todayDate).reduce((sum: number, order: any) => sum + (order.total_amount - (order.advance_amount || 0)), 0);
+
+      // Create payment alerts
+      const alerts: any[] = [];
+      ordersWithBalance.forEach((order: any) => {
+        const balance = order.total_amount - (order.advance_amount || 0);
+        if (balance > 0) {
+          const customerName = customerMap[order.customer_id] || 'Unknown';
+          if (order.due_date && order.due_date < todayDate) {
+            alerts.push({
+              id: order.id,
+              type: 'overdue',
+              title: 'Payment Overdue',
+              message: `₹${balance.toLocaleString()} pending from ${customerName}`,
+              orderNumber: order.order_number || `Order ${String(order.id).slice(0, 8)}`,
+              amount: balance,
+              dueDate: order.due_date,
+              priority: 'high'
+            });
+          } else if (order.due_date && order.due_date <= new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) {
+            alerts.push({
+              id: order.id,
+              type: 'due_soon',
+              title: 'Payment Due Soon',
+              message: `₹${balance.toLocaleString()} due from ${customerName}`,
+              orderNumber: order.order_number || `Order ${String(order.id).slice(0, 8)}`,
+              amount: balance,
+              dueDate: order.due_date,
+              priority: 'medium'
+            });
+          }
+        }
+      });
 
       setDashboardData({
         totalCustomers,
@@ -149,74 +152,62 @@ const Dashboard = () => {
         monthlyRevenue,
         pendingDeliveries,
         overdueTasks,
-        todayDue
+        todayDue,
+        totalPayments,
+        pendingPayments,
+        overduePayments
       });
 
-      // Set recent orders for activity
-      setRecentOrders(orders?.slice(0, 5) || []);
+      setPaymentAlerts(alerts.slice(0, 5));
 
-      // Create recent activities from orders and customers
-      const activities = [];
-      
-      // Recent orders
-      if (orders) {
-        orders.slice(0, 3).forEach(order => {
-          const customerName = customerMap[order.customer_id] || 'Unknown Customer';
-          activities.push({
-            type: 'order',
-            title: `Order ${order.status}`,
-            description: `Order for ${customerName} - ₹${order.total_amount}`,
-            time: order.created_at,
-            icon: ShoppingCart,
-            color: order.status === 'delivered' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
-          });
+      setRecentOrders((orders || []).slice(0, 5).map((order: any) => ({
+        ...order,
+        customer_name: customerMap[order.customer_id] || 'Customer'
+      })));
+
+      // Build recent activities
+      const activities: any[] = [];
+      (orders || []).slice(0, 3).forEach((order: any) => {
+        activities.push({
+          type: 'order',
+          title: `Order ${order.status}`,
+          description: `Order for ${customerMap[order.customer_id] || 'Unknown'} - ₹${order.total_amount}`,
+          time: order.created_at,
+          icon: ShoppingCart,
+          color: order.status === 'delivered' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
         });
-      }
+      });
+      (customersData || []).slice(0, 2).forEach((customer: any) => activities.push({
+        type: 'customer',
+        title: 'New customer registered',
+        description: `Customer ID: ${customer.id}`,
+        time: customer.created_at,
+        icon: Users,
+        color: 'bg-purple-100 text-purple-600'
+      }));
+      (paymentsDetailed || []).slice(0, 2).forEach((payment: any) => activities.push({
+        type: 'payment',
+        title: 'Payment received',
+        description: `₹${payment.amount} payment received`,
+        time: payment.created_at,
+        icon: DollarSign,
+        color: 'bg-green-100 text-green-600'
+      }));
 
-      // Recent customers
-      if (customers) {
-        customers.slice(0, 2).forEach(customer => {
-          activities.push({
-            type: 'customer',
-            title: 'New customer registered',
-            description: `Customer ID: ${customer.id}`,
-            time: customer.created_at,
-            icon: Users,
-            color: 'bg-purple-100 text-purple-600'
-          });
-        });
-      }
-
-      // Recent payments
-      if (payments) {
-        payments.slice(0, 2).forEach(payment => {
-          activities.push({
-            type: 'payment',
-            title: 'Payment received',
-            description: `₹${payment.amount} payment received`,
-            time: payment.created_at,
-            icon: DollarSign,
-            color: 'bg-green-100 text-green-600'
-          });
-        });
-      }
-
-      // Sort activities by time and take latest 5
       activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
       setRecentActivities(activities.slice(0, 5));
-
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch dashboard data',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to fetch dashboard data', variant: 'destructive' });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -284,6 +275,19 @@ const Dashboard = () => {
       iconBg: 'bg-purple-100'
     },
     {
+      title: 'Total Payments',
+      value: isLoading ? '...' : `₹${dashboardData.totalPayments.toLocaleString()}`,
+      icon: CreditCard,
+      description: 'All payments received',
+      color: 'text-emerald-600',
+    },
+    {
+      title: 'Pending Payments',
+      value: isLoading ? '...' : `₹${dashboardData.pendingPayments.toLocaleString()}`,
+      icon: Clock,
+      description: 'Awaiting payment',
+      color: dashboardData.overduePayments > 0 ? 'text-red-600' : 'text-orange-600',
+    },    {
       title: 'Pending Deliveries',
       value: dashboardData.pendingDeliveries.toString(),
       icon: Clock,
@@ -402,7 +406,7 @@ const Dashboard = () => {
                   <CardTitle className="text-sm font-medium text-gray-700">
                     {stat.title}
                   </CardTitle>
-                  <div className={`p-2 rounded-lg ${stat.iconBg}`}>
+                  <div className={`p-2 rounded-lg ${stat.iconBg} animate-pulse`}>
                     <stat.icon className={`h-5 w-5 ${stat.color}`} />
                   </div>
                 </CardHeader>
@@ -457,6 +461,196 @@ const Dashboard = () => {
             </div>
           )}
         </div>
+
+        {/* Real-time Order Status Overview */}
+        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
+              <div className="p-2 bg-orange-500 rounded-lg">
+                <Package className="h-5 w-5 text-white" />
+              </div>
+              <span>Order Status Overview</span>
+            </h2>
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-gray-500">Real-time Updates</span>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/order-status">
+                  <Eye className="h-4 w-4 mr-2" />
+                  View All
+                </Link>
+              </Button>
+            </div>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800">Pending Orders</p>
+                    <p className="text-2xl font-bold text-yellow-900">
+                      {isLoading ? '...' : recentOrders.filter(order => order.status === 'pending').length}
+                    </p>
+                  </div>
+                  <Clock className="h-8 w-8 text-yellow-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="text-xs bg-yellow-200 text-yellow-800 border-yellow-300">
+                    Awaiting approval
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">In Progress</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {isLoading ? '...' : recentOrders.filter(order => order.status === 'in_progress').length}
+                    </p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-blue-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="text-xs bg-blue-200 text-blue-800 border-blue-300">
+                    Active work
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-800">Ready for Delivery</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {isLoading ? '...' : recentOrders.filter(order => order.status === 'ready').length}
+                    </p>
+                  </div>
+                  <Package className="h-8 w-8 text-green-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="text-xs bg-green-200 text-green-800 border-green-300">
+                    Ready to ship
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-red-800">Overdue</p>
+                    <p className="text-2xl font-bold text-red-900">
+                      {isLoading ? '...' : dashboardData.overdueTasks}
+                    </p>
+                  </div>
+                  <Clock className="h-8 w-8 text-red-600" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant="destructive" className="text-xs">
+                    Needs attention
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Orders Preview */}
+          {recentOrders.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Orders</h3>
+              <div className="space-y-3">
+                {recentOrders.slice(0, 5).map((order, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="font-medium text-gray-800">{order.customer_name}</span>
+                      <div>
+                        <p className="font-medium text-gray-900">Order #{order.order_number || `ORD-${index + 1}`}</p>
+                        <p className="text-sm text-gray-600">{order.customer_name}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs ${
+                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                          order.status === 'in_progress' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                          order.status === 'ready' ? 'bg-green-100 text-green-800 border-green-300' :
+                          'bg-gray-100 text-gray-800 border-gray-300'
+                        }`}
+                      >
+                        {order.status?.replace('_', ' ') || 'pending'}
+                      </Badge>
+                      <span className="text-sm text-gray-500">
+                        {order.due_date ? new Date(order.due_date).toLocaleDateString() : 'No due date'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Payment Alerts Section */}
+        {paymentAlerts.length > 0 && (
+          <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
+                <div className="p-2 bg-red-500 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-white" />
+                </div>
+                <span>Payment Alerts</span>
+              </h2>
+              <Badge variant="destructive" className="animate-pulse">
+                {paymentAlerts.length} Alert{paymentAlerts.length > 1 ? 's' : ''}
+              </Badge>
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {paymentAlerts.map((alert) => (
+                <Card key={alert.id} className={`border-l-4 ${
+                  alert.priority === 'high' ? 'border-l-red-500 bg-red-50' : 
+                  alert.priority === 'medium' ? 'border-l-yellow-500 bg-yellow-50' : 
+                  'border-l-blue-500 bg-blue-50'
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        {alert.type === 'overdue' ? (
+                          <XCircle className="h-4 w-4 text-red-600" />
+                        ) : (
+                          <Clock className="h-4 w-4 text-yellow-600" />
+                        )}
+                        <Badge variant={alert.priority === 'high' ? 'destructive' : 'secondary'} className="text-xs">
+                          {alert.type === 'overdue' ? 'OVERDUE' : 'DUE SOON'}
+                        </Badge>
+                      </div>
+                      <span className="text-sm font-bold text-gray-900">
+                        ₹{alert.amount.toLocaleString()}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-1">{alert.orderNumber}</h3>
+                    <p className="text-sm text-gray-600 mb-2">{alert.message}</p>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Due: {new Date(alert.dueDate).toLocaleDateString()}</span>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link to="/payments">View Payment</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Recent Activity */}
         <Card className="bg-white shadow-lg border-0 backdrop-blur-sm bg-white/90">

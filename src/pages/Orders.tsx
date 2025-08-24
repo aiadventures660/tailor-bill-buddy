@@ -317,11 +317,9 @@ const Orders = () => {
 
   const updateOrder = async () => {
     if (isSubmitting) return; // Prevent double submission
-    
+    if (!selectedOrder) return;
     try {
       setIsSubmitting(true);
-      if (!selectedOrder) return;
-      
       const updateData = {
         customer_id: formData.customer_id,
         total_amount: formData.total_amount,
@@ -361,9 +359,9 @@ const Orders = () => {
   };
 
   const deleteOrder = async () => {
+    if (!selectedOrder) return;
+    setIsSubmitting(true);
     try {
-      if (!selectedOrder) return;
-
       // First delete order items
       const { error: itemsError } = await supabase
         .from('order_items')
@@ -395,6 +393,8 @@ const Orders = () => {
         description: 'Failed to delete order',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
