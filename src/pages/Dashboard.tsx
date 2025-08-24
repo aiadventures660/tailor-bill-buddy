@@ -349,47 +349,56 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      <div className="container mx-auto px-4 py-6 max-w-7xl space-y-6">
+      <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-6 max-w-7xl space-y-4 sm:space-y-6">
         {/* Welcome Section */}
-        <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
+        <div className="bg-white rounded-lg sm:rounded-xl shadow-lg border-0 p-4 sm:p-6 backdrop-blur-sm bg-white/90">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
             <div className="space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight text-gray-900 flex items-center space-x-3">
-                <div className="p-3 bg-gray-900 rounded-xl">
-                  <TrendingUp className="h-8 w-8 text-white" />
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-gray-900 flex items-center space-x-2 sm:space-x-3">
+                <div className="p-2 sm:p-3 bg-gray-900 rounded-lg sm:rounded-xl">
+                  <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 lg:h-8 lg:w-8 text-white" />
                 </div>
-                <span>Welcome back, {profile?.full_name || 'User'}!</span>
+                <span className="break-words">Welcome back, {profile?.full_name || 'User'}!</span>
               </h1>
-              <p className="text-gray-600 text-lg">
+              <p className="text-gray-600 text-sm sm:text-base lg:text-lg">
                 You're logged in as {profile?.role ? getRoleDisplayName(profile.role) : 'User'}. 
                 Here's what's happening in your tailoring business today.
               </p>
-              <div className="flex items-center space-x-6 text-sm text-gray-500">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-6 text-xs sm:text-sm text-gray-500">
                 <span className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <span>Real-time Data</span>
                 </span>
                 <span className="flex items-center space-x-1">
-                  <Calendar className="h-4 w-4" />
-                  <span>{new Date().toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}</span>
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="break-words">
+                    <span className="hidden sm:inline">{new Date().toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}</span>
+                    <span className="sm:hidden">{new Date().toLocaleDateString('en-US', { 
+                      weekday: 'short', 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}</span>
+                  </span>
                 </span>
-              </div>
             </div>
             
-            <div className="flex space-x-3">
+            <div className="flex space-x-2 sm:space-x-3 w-full sm:w-auto">
               <Button 
                 onClick={handleRefresh}
                 variant="outline" 
                 disabled={isRefreshing}
-                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="border-gray-300 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm flex-1 sm:flex-none"
+                size="sm"
               >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+                <RefreshCw className={`mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : 'Refresh Data'}</span>
+                <span className="sm:hidden">{isRefreshing ? 'Refreshing' : 'Refresh'}</span>
               </Button>
             </div>
           </div>
@@ -397,24 +406,24 @@ const Dashboard = () => {
 
         {/* Stats Overview */}
         {isLoading ? (
-          <LoadingStats count={4} className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" />
+          <LoadingStats count={4} className="grid gap-3 sm:gap-4 lg:gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4" />
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 lg:gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {dashboardStats.map((stat, index) => (
               <Card key={index} className={`shadow-lg border-0 hover:shadow-xl transition-all duration-300 backdrop-blur-sm ${stat.bgGradient}`}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-700">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 lg:p-6">
+                  <CardTitle className="text-xs sm:text-sm font-medium text-gray-700 truncate">
                     {stat.title}
                   </CardTitle>
-                  <div className={`p-2 rounded-lg ${stat.iconBg} animate-pulse`}>
-                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                  <div className={`p-1.5 sm:p-2 rounded-lg ${stat.iconBg} animate-pulse`}>
+                    <stat.icon className={`h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 ${stat.color}`} />
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gray-900">
+                <CardContent className="p-3 sm:p-4 lg:p-6 pt-0">
+                  <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
                     {stat.value}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 mt-1 truncate">
                     {stat.description}
                   </p>
                 </CardContent>

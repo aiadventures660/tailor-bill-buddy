@@ -26,6 +26,7 @@ import {
   SidebarProvider,
   SidebarInset,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { 
   Users, 
@@ -439,83 +440,36 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
-        {/* Sidebar */}
-        <Sidebar>
-          <SidebarHeader>
-            <div className="flex items-center space-x-2 px-4 py-2">
-              <div className="bg-primary text-primary-foreground p-2 rounded-lg">
-                <Scissors className="h-5 w-5" />
-              </div>
-              <ShoppingBag className="h-5 w-5 text-primary" />
-              <div className="flex flex-col">
-                <span className="font-bold text-sm">A1 Billing</span>
-                <span className="text-xs text-muted-foreground">Tailoring Solution</span>
-              </div>
-            </div>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarMenu>
-              {navigationItems.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton asChild isActive={isActive}>
-                      <Link to={item.path} className="flex items-center space-x-2">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-            
-            {/* Status Management Section */}
-            <div className="mt-6 px-3">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                Order Management
-              </h3>
-              
-              <SidebarMenuButton asChild className="w-full justify-between mb-2">
-                <Link to="/order-status" className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4" />
-                    Order Status
-                  </div>
-                  {pendingApprovals > 0 && (
-                    <Badge variant="destructive" className="h-5 w-5 p-0 text-xs">
-                      {pendingApprovals}
-                    </Badge>
-                  )}
-                </Link>
-              </SidebarMenuButton>
-            </div>
-          </SidebarContent>
-        </Sidebar>
+        <DashboardSidebar 
+          navigationItems={navigationItems} 
+          pendingApprovals={pendingApprovals}
+          profile={profile}
+          location={location}
+        />
 
         {/* Main Content */}
         <SidebarInset className="flex-1">
           {/* Header */}
-          <header className="flex h-16 items-center justify-between border-b bg-background px-6">
-            <div className="flex items-center space-x-4">
-              <SidebarTrigger />
-              <h1 className="font-semibold text-lg">Dashboard</h1>
+          <header className="flex h-14 md:h-16 items-center justify-between border-b px-3 md:px-6 sticky top-0 z-10 backdrop-blur-sm bg-background/95">
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <SidebarTrigger className="md:hidden h-10 w-10 touch-target hover:bg-sidebar-accent transition-colors" />
+              <h1 className="font-semibold text-base md:text-lg truncate">Dashboard</h1>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1 md:space-x-3">
               {/* Notification Bell */}
               <Button
                 variant="ghost"
                 size="sm"
-                className="relative"
+                className="relative h-10 w-10 md:h-10 md:w-10 touch-target hover:bg-accent transition-colors"
                 asChild
               >
                 <Link to="/notifications">
-                  <Bell className="h-5 w-5" />
+                  <Bell className="h-4 w-4 md:h-5 md:w-5" />
                   {unreadCount > 0 && (
                     <Badge 
                       variant="destructive" 
-                      className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
+                      className="absolute -top-1 -right-1 h-4 w-4 md:h-5 md:w-5 p-0 text-xs flex items-center justify-center animate-pulse"
                     >
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </Badge>
@@ -526,28 +480,28 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               {/* User Profile Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
+                  <Button variant="ghost" className="relative h-10 w-10 md:h-10 md:w-10 rounded-full touch-target hover:bg-accent transition-colors">
+                    <Avatar className="h-8 w-8 md:h-8 md:w-8">
+                      <AvatarFallback className="text-xs md:text-sm bg-primary text-primary-foreground">
                         {profile?.full_name ? getInitials(profile.full_name) : 'U'}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuContent className="w-48 md:w-56 mr-2 md:mr-0" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">
+                      <p className="text-sm font-medium leading-none truncate">
                         {profile?.full_name || 'User'}
                       </p>
-                      <p className="text-xs leading-none text-muted-foreground">
+                      <p className="text-xs leading-none text-muted-foreground truncate">
                         {profile?.role ? getRoleDisplayName(profile.role) : 'Loading...'}
                       </p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link to="/profile" className="flex items-center">
+                    <Link to="/profile" className="flex items-center touch-target">
                       <User className="mr-2 h-4 w-4" />
                       Profile
                     </Link>
@@ -555,7 +509,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
                     onClick={handleSignOut}
-                    className="text-destructive focus:text-destructive"
+                    className="text-destructive focus:text-destructive touch-target"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign out
@@ -566,12 +520,115 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
           </header>
 
           {/* Page Content */}
-          <main className="flex-1 py-6">
+          <main className="flex-1 p-2 sm:p-3 lg:p-6 overflow-x-hidden">
             {children}
           </main>
         </SidebarInset>
       </div>
     </SidebarProvider>
+  );
+};
+
+// Separate component for sidebar with mobile handling
+const DashboardSidebar: React.FC<{
+  navigationItems: any[];
+  pendingApprovals: number;
+  profile: any;
+  location: any;
+}> = ({ navigationItems, pendingApprovals, profile, location }) => {
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      // Add a small delay for better UX
+      setTimeout(() => {
+        setOpenMobile(false);
+      }, 150);
+    }
+  };
+
+  return (
+    <Sidebar className="border-r transition-all duration-300 ease-in-out">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center space-x-2 px-3 md:px-4 py-3 md:py-4">
+          <div className="bg-primary text-primary-foreground p-1.5 md:p-2 rounded-lg shadow-sm">
+            <Scissors className="h-4 w-4 md:h-5 md:w-5" />
+          </div>
+          <ShoppingBag className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+          <div className="flex flex-col">
+            <span className="font-bold text-sm md:text-base">A1 Billing</span>
+            <span className="text-xs text-muted-foreground">Tailoring Solution</span>
+          </div>
+        </div>
+      </SidebarHeader>
+      <SidebarContent className="px-2 py-4">
+        <SidebarMenu className="space-y-1">
+          {navigationItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <SidebarMenuItem key={item.path}>
+                <SidebarMenuButton asChild isActive={isActive} className="transition-all duration-200 hover:bg-sidebar-accent rounded-lg mx-1">
+                  <Link 
+                    to={item.path} 
+                    className="flex items-center space-x-3 px-3 py-2.5 rounded-lg group"
+                    onClick={handleNavClick}
+                  >
+                    <item.icon className="h-4 w-4 transition-colors group-hover:text-sidebar-primary" />
+                    <span className="text-sm font-medium transition-colors group-hover:text-sidebar-primary">{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+        
+        {/* Status Management Section */}
+        <div className="mt-6 px-2">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-3">
+            Order Management
+          </h3>
+          
+          <SidebarMenuButton asChild className="w-full justify-between mb-2 transition-all duration-200 hover:bg-sidebar-accent rounded-lg mx-1">
+            <Link 
+              to="/order-status" 
+              className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg group"
+              onClick={handleNavClick}
+            >
+              <div className="flex items-center space-x-3">
+                <Package className="h-4 w-4 transition-colors group-hover:text-sidebar-primary" />
+                <span className="text-sm font-medium transition-colors group-hover:text-sidebar-primary">Order Status</span>
+              </div>
+              {pendingApprovals > 0 && (
+                <Badge variant="destructive" className="h-5 w-5 p-0 text-xs animate-pulse shadow-sm">
+                  {pendingApprovals}
+                </Badge>
+              )}
+            </Link>
+          </SidebarMenuButton>
+        </div>
+
+        {/* Mobile User Info */}
+        {isMobile && profile && (
+          <div className="mt-auto border-t border-sidebar-border pt-4 px-2">
+            <div className="flex items-center space-x-3 px-3 py-2 bg-sidebar-accent rounded-lg">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                  {profile?.full_name ? profile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  {profile?.full_name || 'User'}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : 'Loading...'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </SidebarContent>
+    </Sidebar>
   );
 };
 
