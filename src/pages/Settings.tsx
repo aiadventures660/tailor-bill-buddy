@@ -142,7 +142,6 @@ const Settings = () => {
 
   useEffect(() => {
     loadSettings();
-    loadUsers();
   }, []);
 
   const loadSettings = () => {
@@ -343,7 +342,6 @@ const Settings = () => {
       const { error } = await supabase.auth.updateUser({
         password: passwordChange.newPassword,
       });
-
       if (error) throw error;
 
       toast({
@@ -368,13 +366,10 @@ const Settings = () => {
     try {
       // Export customers
       const { data: customers } = await supabase.from('customers').select('*');
-      
       // Export orders
       const { data: orders } = await supabase.from('orders').select('*');
-      
       // Export measurements
       const { data: measurements } = await supabase.from('measurements').select('*');
-
       // Export order items
       const { data: orderItems } = await supabase.from('order_items').select('*');
 
@@ -422,10 +417,8 @@ const Settings = () => {
     try {
       // Simulate backup process
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
       // Save backup timestamp
       localStorage.setItem('last_backup', new Date().toISOString());
-      
       toast({
         title: 'Success',
         description: 'Manual backup completed successfully',
@@ -466,7 +459,7 @@ const Settings = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+  <div className="pl-4 sm:pl-8 lg:pl-12 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center space-x-2">
             <SettingsIcon className="h-8 w-8 text-primary" />
@@ -533,7 +526,6 @@ const Settings = () => {
                     placeholder="+91 12345 67890"
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address *</Label>
                   <Input
@@ -545,7 +537,6 @@ const Settings = () => {
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="address">Business Address *</Label>
                 <Textarea
@@ -556,7 +547,6 @@ const Settings = () => {
                   rows={3}
                 />
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="website">Website</Label>
@@ -653,7 +643,6 @@ const Settings = () => {
                       placeholder="Enter full name"
                     />
                   </div>
-                  
                   <div className="space-y-2">
                     <Label htmlFor="user_email">Email</Label>
                     <Input
@@ -664,7 +653,6 @@ const Settings = () => {
                       placeholder="Enter email address"
                     />
                   </div>
-                  
                   <div className="space-y-2">
                     <Label htmlFor="user_password">Password</Label>
                     <Input
@@ -675,7 +663,6 @@ const Settings = () => {
                       placeholder="Enter password"
                     />
                   </div>
-                  
                   <div className="space-y-2">
                     <Label htmlFor="user_role">Role</Label>
                     <Select
@@ -692,7 +679,6 @@ const Settings = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  
                   <Button onClick={createUser} disabled={loading} className="w-full">
                     Create User
                   </Button>

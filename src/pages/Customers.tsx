@@ -366,7 +366,7 @@ const Customers = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-      <div className="w-full pr-2 sm:pr-4 lg:pr-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
+  <div className="w-full pl-4 pr-2 sm:pl-8 sm:pr-4 lg:pl-12 lg:pr-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
         {/* Header Section */}
         <div className="bg-white rounded-xl shadow-lg border-0 p-6 backdrop-blur-sm bg-white/90">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
@@ -404,10 +404,7 @@ const Customers = () => {
                 }}
               >
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Quick Add Customer
-                  </Button>
+                  {/* Quick Add Customer button removed as requested */}
                 </DialogTrigger>
               </Dialog>
               

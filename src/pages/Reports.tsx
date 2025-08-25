@@ -265,9 +265,9 @@ const Reports = () => {
   };
 
   return (
-    <div className="space-y-6">
+  <div className="space-y-6 px-4 sm:px-8 lg:px-12">
       {/* Header */}
-      <div className="flex justify-between items-center">
+  <div className="px-4 sm:px-8 lg:px-12 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center space-x-2">
             <BarChart3 className="h-8 w-8 text-primary" />
@@ -286,7 +286,7 @@ const Reports = () => {
 
       {/* Date Range and Report Type */}
       <Card>
-        <CardContent className="pt-6">
+  <CardContent className="pt-6 px-4 sm:px-8 lg:px-12">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -398,7 +398,7 @@ const Reports = () => {
 
           {/* Sales Breakdown */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Card>
+            <Card className="px-4 sm:px-8 lg:px-12">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <PieChart className="h-5 w-5" />
@@ -440,7 +440,7 @@ const Reports = () => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="px-4 sm:px-8 lg:px-12">
               <CardHeader>
                 <CardTitle>Order Status</CardTitle>
               </CardHeader>
@@ -478,7 +478,7 @@ const Reports = () => {
 
           {/* Top Customers */}
           {reportData.topCustomers.length > 0 && (
-            <Card>
+            <Card className="px-4 sm:px-8 lg:px-12">
               <CardHeader>
                 <CardTitle>Top Customers</CardTitle>
                 <CardDescription>
@@ -506,7 +506,7 @@ const Reports = () => {
 
           {/* Sales by Category */}
           {reportData.salesByCategory.length > 0 && (
-            <Card>
+            <Card className="px-4 sm:px-8 lg:px-12">
               <CardHeader>
                 <CardTitle>Ready-made Sales by Category</CardTitle>
                 <CardDescription>
@@ -539,7 +539,7 @@ const Reports = () => {
 
           {/* Monthly Trends */}
           <Card>
-            <CardHeader>
+            <CardHeader className="px-4 sm:px-8 lg:px-12">
               <CardTitle>6-Month Trend</CardTitle>
               <CardDescription>
                 Sales and order trends over the last 6 months

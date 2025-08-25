@@ -90,7 +90,8 @@ const Billing = () => {
   const [customerSearch, setCustomerSearch] = useState('');
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [gstRate, setGstRate] = useState(18);
+  // Fixed discount rate (percentage)
+  const DISCOUNT_RATE = 10; // 10% discount applied to subtotal
   const [notes, setNotes] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
@@ -249,7 +250,8 @@ const Billing = () => {
 
         // Calculate totals from items
         const subtotal = items.reduce((sum: number, item: any) => sum + item.total_price, 0);
-        const gstAmount = (subtotal * 18) / 100;
+        const discountAmount = (subtotal * DISCOUNT_RATE) / 100;
+        const finalTotal = subtotal - discountAmount;
 
         return {
           id: order.id,
@@ -258,9 +260,9 @@ const Billing = () => {
           customer: order.customer,
           items: items,
           subtotal: subtotal,
-          gst_rate: 18,
-          gst_amount: gstAmount,
-          total_amount: order.total_amount,
+          gst_rate: 0,
+          gst_amount: 0,
+          total_amount: finalTotal,
           created_at: order.created_at,
           due_date: order.due_date,
           notes: order.notes,
@@ -372,9 +374,9 @@ const Billing = () => {
 
   const calculateTotals = () => {
     const subtotal = invoiceItems.reduce((sum, item) => sum + item.total_price, 0);
-    const gstAmount = (subtotal * gstRate) / 100;
-    const totalAmount = subtotal + gstAmount;
-    return { subtotal, gstAmount, totalAmount };
+    const discountAmount = (subtotal * DISCOUNT_RATE) / 100;
+    const totalAmount = subtotal - discountAmount;
+    return { subtotal, discountAmount, totalAmount };
   };
 
   const createInvoice = async () => {
@@ -389,7 +391,7 @@ const Billing = () => {
 
     setLoading(true);
     try {
-      const { subtotal, gstAmount, totalAmount } = calculateTotals();
+  const { subtotal, discountAmount, totalAmount } = calculateTotals();
       const invoiceNumber = generateInvoiceNumber();
 
       const orderData = {
@@ -447,8 +449,8 @@ const Billing = () => {
         },
         items: invoiceItems,
         subtotal: subtotal,
-        gst_rate: gstRate,
-        gst_amount: gstAmount,
+        gst_rate: 0,
+        gst_amount: 0,
         total_amount: totalAmount,
         due_date: dueDate,
         notes: notes,
@@ -522,7 +524,7 @@ const Billing = () => {
       return;
     }
 
-    const { subtotal, gstAmount, totalAmount } = calculateTotals();
+    const { subtotal, discountAmount, totalAmount } = calculateTotals();
     const previewInvoice: Invoice = {
       id: 'preview',
       invoice_number: 'PREVIEW-' + Date.now().toString().slice(-6),
@@ -536,8 +538,8 @@ const Billing = () => {
       },
       items: invoiceItems,
       subtotal: subtotal,
-      gst_rate: gstRate,
-      gst_amount: gstAmount,
+      gst_rate: 0,
+      gst_amount: 0,
       total_amount: totalAmount,
       due_date: dueDate,
       notes: notes,
@@ -691,11 +693,9 @@ const Billing = () => {
   };
 
   const generateInvoiceHTML = (invoice: Invoice) => {
-    const { subtotal, gstAmount, totalAmount } = {
-      subtotal: invoice.subtotal,
-      gstAmount: invoice.gst_amount,
-      totalAmount: invoice.total_amount
-    };
+    const subtotal = invoice.subtotal;
+    const discountAmount = (subtotal * DISCOUNT_RATE) / 100;
+    const totalAmount = invoice.total_amount;
 
     return `
       <!DOCTYPE html>
@@ -985,8 +985,8 @@ const Billing = () => {
               <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
             </tr>
             <tr>
-              <td>GST (${invoice.gst_rate}%):</td>
-              <td style="text-align: right;">₹${gstAmount.toFixed(2)}</td>
+              <td>Discount (${DISCOUNT_RATE}%):</td>
+              <td style="text-align: right;">₹${(subtotal * DISCOUNT_RATE / 100).toFixed(2)}</td>
             </tr>
             <tr class="total-row">
               <td><strong>कुल योग / Total:</strong></td>
@@ -1038,7 +1038,7 @@ const Billing = () => {
     customer.mobile.includes(customerSearch)
   );
 
-  const { subtotal, gstAmount, totalAmount } = calculateTotals();
+  const { subtotal, discountAmount, totalAmount } = calculateTotals();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pl-2 pr-2 md:pl-3 md:pr-2">
@@ -1160,6 +1160,7 @@ const Billing = () => {
                       />
                     </div>
                   </div>
+                  {/* Quick Add Customer button removed as requested */}
 
                   {customerSearch && (
                     <div className="max-h-60 overflow-y-auto space-y-2 border border-gray-200 rounded-lg p-2">
@@ -1372,24 +1373,7 @@ const Billing = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 space-y-4">
-                  <div>
-                    <Label htmlFor="gst-rate" className="text-gray-700 font-medium">GST Rate (%)</Label>
-                    <Select
-                      value={gstRate.toString()}
-                      onValueChange={(value) => setGstRate(parseFloat(value))}
-                    >
-                      <SelectTrigger className="mt-2 border-gray-300 focus:border-gray-500 focus:ring-gray-500">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">0% (No GST)</SelectItem>
-                        <SelectItem value="5">5%</SelectItem>
-                        <SelectItem value="12">12%</SelectItem>
-                        <SelectItem value="18">18%</SelectItem>
-                        <SelectItem value="28">28%</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Discount is fixed at 10% applied to subtotal */}
 
                   <div>
                     <Label htmlFor="due-date" className="text-gray-700 font-medium">Due Date (Optional)</Label>
@@ -1468,8 +1452,8 @@ const Billing = () => {
                           <span className="text-gray-900">₹{subtotal.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">GST ({gstRate}%):</span>
-                          <span className="text-gray-900">₹{gstAmount.toFixed(2)}</span>
+                          <span className="text-gray-600">Discount ({DISCOUNT_RATE}%):</span>
+                          <span className="text-gray-900">₹{(subtotal * DISCOUNT_RATE / 100).toFixed(2)}</span>
                         </div>
                         <Separator className="bg-gray-300" />
                         <div className="flex justify-between font-bold text-lg">

@@ -5,13 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Ruler, Plus, Search, User, Edit, Trash2, Phone, Calendar, Filter, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { Ruler, Plus, Search, User, Phone, Calendar, Filter, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Customer {
@@ -407,7 +406,7 @@ const Measurements = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="w-full pr-2 sm:pr-4 lg:pr-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
+  <div className="w-full pl-4 pr-2 sm:pl-8 sm:pr-4 lg:pl-12 lg:pr-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
         {/* Header - Responsive */}
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
           <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
@@ -422,15 +421,7 @@ const Measurements = () => {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              {/* Real-time toggle */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setRealTimeEnabled(!realTimeEnabled)}
-                className={`${realTimeEnabled ? 'bg-green-50 border-green-300 text-green-700' : 'bg-gray-50 border-gray-300 text-gray-700'}`}
-              >
-                {realTimeEnabled ? 'Real-time ON' : 'Real-time OFF'}
-              </Button>
+              {/* Real-time toggle removed as requested */}
               
               <Dialog 
                 open={isAddDialogOpen} 
@@ -442,13 +433,7 @@ const Measurements = () => {
                   }
                 }}
               >
-                <DialogTrigger asChild>
-                  <Button className="bg-gray-900 hover:bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-lg font-semibold">
-                    <Plus className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                    <span className="hidden sm:inline">Add New Measurement</span>
-                    <span className="sm:hidden">Add</span>
-                  </Button>
-                </DialogTrigger>
+                {/* Add New Measurement button removed as requested */}
                 <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto bg-white border-gray-200">
                   <DialogHeader className="border-b border-gray-100 pb-4">
                     <DialogTitle className="text-xl sm:text-2xl font-bold text-gray-900">
@@ -763,50 +748,7 @@ const Measurements = () => {
                   {/* Expandable Content */}
                   <CollapsibleContent>
                     <CardContent className="p-3 sm:p-6">
-                      {/* Action Buttons */}
-                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mb-6">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(measurement)}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 flex-1 sm:flex-none"
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                        
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-red-300 text-red-600 hover:bg-red-50 flex-1 sm:flex-none"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Delete
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="bg-white border-gray-200 w-[95vw] max-w-md">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="text-gray-900">Are you sure?</AlertDialogTitle>
-                              <AlertDialogDescription className="text-gray-600">
-                                This action cannot be undone. This will permanently delete the measurement record.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter className="flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                              <AlertDialogCancel className="border-gray-300 text-gray-700 hover:bg-gray-50 w-full sm:w-auto">
-                                Cancel
-                              </AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => handleDelete(measurement.id)}
-                                className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                      {/* Actions removed: edit/delete moved to centralized measurement management */}
 
                       {/* Measurements Grid - Responsive */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
