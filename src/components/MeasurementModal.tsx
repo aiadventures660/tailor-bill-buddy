@@ -30,12 +30,15 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
       {
         title: "Body Measurements",
         fields: [
-          { name: 'chest', label: 'CHEST', unit: 'inches' },
+         
           { name: 'length', label: 'LENGTH', unit: 'inches' },
+           { name: 'chest', label: 'CHEST', unit: 'inches' },
+            { name: 'waist', label: 'WAIST', unit: 'inches' },
+          { name: 'hip', label: 'HIP', unit: 'inches' },
           { name: 'shoulder', label: 'SHOULDER', unit: 'inches' },
           { name: 'sleeve', label: 'SLEEVE', unit: 'inches' },
           { name: 'collar', label: 'COLLAR', unit: 'inches' },
-          { name: 'waist', label: 'WAIST', unit: 'inches' },
+         
         ]
       },
       {
@@ -43,7 +46,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
           { name: 'pocket', label: 'POCKET', unit: 'text' },
-          { name: 'color', label: 'COLOR', unit: 'text' },
+
         ]
       },
       {
@@ -51,7 +54,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
           { name: 'worker', label: 'WORKER', unit: 'text' },
-          { name: 'others', label: 'OTHERS', unit: 'text' },
+          { name: 'customer', label: 'CUSTOMER DEMAND', unit: 'text' },
         ]
       }
     ]
@@ -61,12 +64,14 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
       {
         title: "Body Measurements",
         fields: [
+            { name: 'length', label: 'PANT LENGTH', unit: 'inches' },
           { name: 'waist', label: 'WAIST', unit: 'inches' },
           { name: 'hip', label: 'HIP', unit: 'inches' },
-          { name: 'length', label: 'PANT LENGTH', unit: 'inches' },
-          { name: 'bottom', label: 'BOTTOM', unit: 'inches' },
+             { name: 'high', label: 'HIGH', unit: 'inches' },
           { name: 'thigh', label: 'THIGH', unit: 'inches' },
           { name: 'knee', label: 'KNEE', unit: 'inches' },
+          { name: 'mohari', label: 'MOHARI', unit: 'inches' }
+  
         ]
       },
       {
@@ -74,7 +79,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'pocket_style', label: 'POCKET STYLE', unit: 'text' },
           { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
-          { name: 'color', label: 'COLOR', unit: 'text' },
+          
         ]
       },
       {
@@ -82,7 +87,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
           { name: 'worker', label: 'WORKER', unit: 'text' },
-          { name: 'others', label: 'OTHERS', unit: 'text' },
+         
         ]
       }
     ]
@@ -92,11 +97,14 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
       {
         title: "Body Measurements",
         fields: [
-          { name: 'chest', label: 'CHEST', unit: 'inches' },
+          
           { name: 'length', label: 'KURTA LENGTH', unit: 'inches' },
+          { name: 'chest', label: 'CHEST', unit: 'inches' },
+          { name: 'waist', label: 'Waist', unit: 'inches' },
+              { name: 'hip', label: 'Hip', unit: 'inches' },
           { name: 'shoulder', label: 'SHOULDER', unit: 'inches' },
           { name: 'sleeve', label: 'SLEEVE', unit: 'inches' },
-          { name: 'collar', label: 'COLLAR', unit: 'inches' },
+          { name: 'mohair/cuff', label: 'Mohair/Cuff ', unit: 'inches' },
         ]
       },
       {
@@ -104,7 +112,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
           { name: 'pocket', label: 'POCKET', unit: 'text' },
-          { name: 'color', label: 'COLOR', unit: 'text' },
+         
         ]
       },
       {
@@ -112,7 +120,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
           { name: 'worker', label: 'WORKER', unit: 'text' },
-          { name: 'others', label: 'OTHERS', unit: 'text' },
+          
         ]
       }
     ]
@@ -122,8 +130,8 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
       {
         title: "Body Measurements",
         fields: [
-          { name: 'waist', label: 'WAIST', unit: 'inches' },
           { name: 'length', label: 'PAJAMA LENGTH', unit: 'inches' },
+          { name: 'waist', label: 'WAIST', unit: 'inches' },
           { name: 'bottom', label: 'BOTTOM', unit: 'inches' },
         ]
       },
@@ -131,7 +139,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         title: "Style & Details",
         fields: [
           { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
-          { name: 'color', label: 'COLOR', unit: 'text' },
+     
         ]
       },
       {
@@ -139,7 +147,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
           { name: 'worker', label: 'WORKER', unit: 'text' },
-          { name: 'others', label: 'OTHERS', unit: 'text' },
+         
         ]
       }
     ]
@@ -149,12 +157,14 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
       {
         title: "Body Measurements",
         fields: [
+           { name: 'length', label: 'COAT LENGTH', unit: 'inches' },
           { name: 'chest', label: 'CHEST', unit: 'inches' },
           { name: 'waist', label: 'WAIST', unit: 'inches' },
           { name: 'hip', label: 'HIP', unit: 'inches' },
-          { name: 'length', label: 'COAT LENGTH', unit: 'inches' },
+         
           { name: 'shoulder', label: 'SHOULDER', unit: 'inches' },
-          { name: 'sleeve', label: 'SLEEVE', unit: 'inches' },
+          { name: 'mohari', label: 'MOHARI', unit: 'inches' },
+          { name: 'collar', label: 'COLLAR', unit: 'inches'},
         ]
       },
       {
@@ -162,7 +172,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
           { name: 'pocket', label: 'POCKET', unit: 'text' },
-          { name: 'color', label: 'COLOR', unit: 'text' },
+         
         ]
       },
       {
@@ -170,7 +180,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
           { name: 'worker', label: 'WORKER', unit: 'text' },
-          { name: 'others', label: 'OTHERS', unit: 'text' },
+       
         ]
       }
     ]
@@ -180,16 +190,19 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
       {
         title: "Body Measurements",
         fields: [
+            { name: 'length', label: 'BANDI LENGTH', unit: 'inches' },
           { name: 'chest', label: 'CHEST', unit: 'inches' },
-          { name: 'length', label: 'BANDI LENGTH', unit: 'inches' },
+         { name: 'waist', label: 'WAIST', unit: 'inches' },
+          { name: 'hip', label: 'HIP', unit: 'inches' },
           { name: 'shoulder', label: 'SHOULDER', unit: 'inches' },
+          { name: 'collar', label: 'COLLAR', unit: 'inches' },
         ]
       },
       {
         title: "Style & Details",
         fields: [
           { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
-          { name: 'color', label: 'COLOR', unit: 'text' },
+          
         ]
       },
       {
@@ -197,7 +210,7 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
           { name: 'worker', label: 'WORKER', unit: 'text' },
-          { name: 'others', label: 'OTHERS', unit: 'text' },
+          
         ]
       }
     ]
@@ -207,16 +220,19 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
       {
         title: "Body Measurements",
         fields: [
+           { name: 'length', label: 'LENGTH', unit: 'inches' },
           { name: 'chest', label: 'CHEST', unit: 'inches' },
           { name: 'waist', label: 'WAIST', unit: 'inches' },
-          { name: 'length', label: 'LENGTH', unit: 'inches' },
+          { name: 'hip', label: 'HIP', unit: 'inches' },
+          { name: 'shoulder', label: 'SHOULDER', unit: 'inches' },
+          { name: 'collar', label: 'COLLAR', unit: 'inches' },
         ]
       },
       {
         title: "Style & Details",
         fields: [
           { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
-          { name: 'color', label: 'COLOR', unit: 'text' },
+         
         ]
       },
       {
@@ -224,11 +240,78 @@ const measurementFields: Record<string, { sections: { title: string; fields: Mea
         fields: [
           { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
           { name: 'worker', label: 'WORKER', unit: 'text' },
-          { name: 'others', label: 'OTHERS', unit: 'text' },
+         
+        ]
+      }
+    ]
+  },
+  non_denim_pant: {
+  sections: [
+    {
+      title: "Body Measurements",
+      fields: [
+        { name: "length", label: "LENGTH", unit: "inches" },
+        { name: "waist", label: "WAIST", unit: "inches" },
+        { name: "hip", label: "HIP", unit: "inches" },
+        { name: "thigh", label: "THIGH", unit: "inches" },
+        { name: "knee", label: "KNEE", unit: "inches" },
+        { name: "bottom", label: "BOTTOM", unit: "inches" },
+        { name: "pocket", label: "POCKET", unit: "inches" }
+      ]
+    },
+    {
+      title: "Style & Details",
+      fields: [
+        { name: "fit_type", label: "FIT TYPE", unit: "text" }, 
+        { name: "pleats", label: "PLEATS (Yes/No)", unit: "text" },
+        { name: "pocket_style", label: "POCKET STYLE", unit: "text" }
+      ]
+    },
+    {
+      title: "Production Details",
+      fields: [
+        { name: "cutting_master", label: "CUTTING MASTER", unit: "text" },
+        { name: "worker", label: "WORKER", unit: "text" }
+        
+      ]
+    }
+  ]
+},
+short_kurta: {
+    sections: [
+      {
+        title: "Body Measurements",
+        fields: [
+          { name: 'length', label: 'SHORT KURTA LENGTH', unit: 'inches' },
+          { name: 'chest', label: 'CHEST', unit: 'inches' },
+          { name: 'waist', label: 'WAIST', unit: 'inches' },
+          { name: 'hip', label: 'HIP', unit: 'inches' },
+          { name: 'shoulder', label: 'SHOULDER', unit: 'inches' },
+          { name: 'sleeve', label: 'SLEEVE', unit: 'inches' },
+          { name: 'collar', label: 'COLLAR', unit: 'inches' },
+          { name: 'mohair/cuff', label: 'MOHAIR/CUFF', unit: 'inches' },
+        ]
+      },
+      {
+        title: "Style & Details",
+        fields: [
+          { name: 'fitting_style', label: 'FITTING STYLE', unit: 'text' },
+          { name: 'pocket', label: 'POCKET', unit: 'text' },
+          { name: 'pattern', label: 'PATTERN', unit: 'text' },
+          { name: 'placket_style', label: 'PLACKET STYLE', unit: 'text' },
+        ]
+      },
+      {
+        title: "Production Details",
+        fields: [
+          { name: 'cutting_master', label: 'CUTTING MASTER', unit: 'text' },
+          { name: 'worker', label: 'WORKER', unit: 'text' },
+          { name: 'special_notes', label: 'SPECIAL NOTES', unit: 'text' },
         ]
       }
     ]
   }
+
 };
 
 const MeasurementModal: React.FC<MeasurementModalProps> = ({
@@ -381,12 +464,20 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
     const availableTypes = [];
     selectedGarments.forEach(garment => {
       const garmentLower = garment.toLowerCase();
-      if (garmentLower.includes('shirt') && !garmentLower.includes('pant') && !garmentLower.includes('neharu')) {
+      if (garmentLower.includes('shirt') && !garmentLower.includes('pant')) {
         availableTypes.push({ value: 'shirt', label: 'Shirt' });
       } else if (garmentLower.includes('pant') || garmentLower.includes('wizar')) {
-        availableTypes.push({ value: 'pant', label: 'Pant' });
-      } else if (garmentLower.includes('neharu') || garmentLower.includes('kurta')) {
-        availableTypes.push({ value: 'kurta', label: 'Kurta' });
+        if (garmentLower.includes('non') && garmentLower.includes('denim')) {
+          availableTypes.push({ value: 'non_denim_pant', label: 'Non Denim Pant' });
+        } else {
+          availableTypes.push({ value: 'pant', label: 'Pant' });
+        }
+      } else if (garmentLower.includes('kurta')) {
+        if (garmentLower.includes('short')) {
+          availableTypes.push({ value: 'short_kurta', label: 'Short Kurta' });
+        } else {
+          availableTypes.push({ value: 'kurta', label: 'Kurta' });
+        }
       } else if (garmentLower.includes('pajama')) {
         availableTypes.push({ value: 'pajama', label: 'Pajama' });
       } else if (garmentLower.includes('coat')) {
@@ -406,10 +497,13 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
       { value: 'shirt', label: 'Shirt' },
       { value: 'pant', label: 'Pant' },
       { value: 'kurta', label: 'Kurta' },
+      { value: 'short_kurta', label: 'Short Kurta' },
       { value: 'pajama', label: 'Pajama' },
       { value: 'coat', label: 'Coat' },
+
       { value: 'bandi', label: 'Bandi' },
-      { value: 'westcot', label: 'Westcot' }
+      { value: 'westcot', label: 'Westcot' },
+      { value: 'non_denim_pant', label: 'Non Denim Pant' }
     ];
   };
 

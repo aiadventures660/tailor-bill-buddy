@@ -29,7 +29,7 @@ const NewCustomer = () => {
   const [formData, setFormData] = useState({
     id: '',
     firstName: '',
-    middleName: '',
+   
     surname: '',
     address: '',
     contactNo: '',
@@ -47,13 +47,14 @@ const NewCustomer = () => {
   // Garment types
   const [garmentTypes, setGarmentTypes] = useState<GarmentType[]>([
     { id: '1', name: 'SHIRT', selected: false, quantity: 0 },
-    { id: '2', name: 'PANT', selected: false, quantity: 0 },
-    { id: '3', name: 'KURTA', selected: false, quantity: 0 },
-    { id: '4', name: 'PAJAMA', selected: false, quantity: 0 },
-    { id: '5', name: 'COAT', selected: false, quantity: 0 },
-    { id: '6', name: 'BANDI', selected: false, quantity: 0 },
-    { id: '7', name: 'WESTCOT', selected: false, quantity: 0 },
-    { id: '8', name: 'NEHARU SHIRT', selected: false, quantity: 0 },
+    { id: '2', name: 'KURTA', selected: false, quantity: 0 },
+    { id: '3', name: 'PANT', selected: false, quantity: 0 },
+    { id: '4', name: 'NON DENIM PANT', selected: false, quantity: 0 },
+    { id: '5', name: 'SHORT KURTA', selected: false, quantity: 0 },
+    { id: '6', name: 'COAT', selected: false, quantity: 0 },
+    { id: '7', name: 'BANDI', selected: false, quantity: 0 },
+    { id: '8', name: 'WESTCOT', selected: false, quantity: 0 },
+    { id: '9', name: 'PAJAMA', selected: false, quantity: 0 },
   ]);
 
   // Measurement modal state
@@ -274,7 +275,7 @@ const NewCustomer = () => {
     setFormData({
       id: '',
       firstName: '',
-      middleName: '',
+     
       surname: '',
       address: '',
       contactNo: '',
@@ -370,12 +371,7 @@ const NewCustomer = () => {
                       placeholder="First name"
                       required
                     />
-                    <Input
-                      value={formData.middleName}
-                      onChange={(e) => handleInputChange('middleName', e.target.value)}
-                      className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
-                      placeholder="Middle name"
-                    />
+                 
                     <Input
                       value={formData.surname}
                       onChange={(e) => handleInputChange('surname', e.target.value)}
