@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { X } from 'lucide-react';
+import { X, Printer } from 'lucide-react';
 
 interface MeasurementModalProps {
   isOpen: boolean;
@@ -325,10 +325,9 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
 }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [selectedGarmentType, setSelectedGarmentType] = useState<string>(garmentType);
   const [measurements, setMeasurements] = useState<Record<string, string>>({});
 
-  const garmentConfig = measurementFields[selectedGarmentType.toLowerCase()] || measurementFields.shirt;
+  const garmentConfig = measurementFields[garmentType.toLowerCase()] || measurementFields.shirt;
 
   // Initialize measurements when modal opens
   useEffect(() => {
@@ -340,9 +339,8 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
         });
       });
       setMeasurements(initialMeasurements);
-      setSelectedGarmentType(garmentType);
     }
-  }, [isOpen, garmentType, selectedGarmentType]);
+  }, [isOpen, garmentType, garmentConfig]);
 
   const handleMeasurementChange = (fieldName: string, value: string) => {
     setMeasurements(prev => ({
@@ -352,12 +350,14 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
   };
 
   const handleSave = async () => {
-    if (!customerId) {
+    // Check if this is a temp customer (measurements will be saved later with the customer)
+    if (!customerId || customerId === 'temp-customer') {
       toast({
-        title: 'Error',
-        description: 'Customer ID is required to save measurements',
-        variant: 'destructive',
+        title: 'Measurements Recorded',
+        description: 'Measurements have been recorded and will be saved when you save the customer record.',
       });
+      onSave(measurements);
+      onClose();
       return;
     }
 
@@ -377,7 +377,7 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
 
       // Map new garment types to existing database enum values
       let dbClothingType: "shirt" | "pant" | "kurta_pajama" | "suit" | "blouse" | "saree_blouse";
-      const garmentLower = selectedGarmentType.toLowerCase();
+      const garmentLower = garmentType.toLowerCase();
       
       if (garmentLower === 'shirt') {
         dbClothingType = 'shirt';
@@ -422,6 +422,228 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
     }
   };
 
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Error',
+        description: 'Unable to open print window. Please check your browser settings.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const currentDate = new Date().toLocaleDateString('en-IN');
+    
+    // Generate measurements HTML
+    const measurementsHTML = garmentConfig.sections.map(section => {
+      const filledFields = section.fields.filter(field => measurements[field.name]);
+      if (filledFields.length === 0) return '';
+      
+      return `
+        <div class="section">
+          <h3 class="section-title">${section.title}</h3>
+          <table class="measurements-table">
+            ${filledFields.map(field => `
+              <tr>
+                <td class="label">${field.label}:</td>
+                <td class="value">${measurements[field.name]}${field.unit === 'inches' ? '"' : ''}</td>
+              </tr>
+            `).join('')}
+          </table>
+        </div>
+      `;
+    }).filter(section => section).join('');
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Customer Measurements - ${customerName}</title>
+        <style>
+          @media print {
+            body { -webkit-print-color-adjust: exact; }
+          }
+          
+          body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.4;
+            color: #333;
+          }
+          
+          .header {
+            text-align: center;
+            border-bottom: 3px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+          }
+          
+          .company-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          
+          .company-subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+          }
+          
+          .customer-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+          }
+          
+          .customer-info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #333;
+          }
+          
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+          }
+          
+          .garment-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 10px;
+            background: #333;
+            color: white;
+            border-radius: 5px;
+          }
+          
+          .section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+          }
+          
+          .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #f1f1f1;
+            border-left: 4px solid #333;
+          }
+          
+          .measurements-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+          }
+          
+          .measurements-table td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+          }
+          
+          .measurements-table .label {
+            background: #f8f9fa;
+            font-weight: bold;
+            width: 40%;
+          }
+          
+          .measurements-table .value {
+            background: white;
+            width: 60%;
+          }
+          
+          .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 2px solid #333;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+          }
+          
+          .signature-section {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+          }
+          
+          .signature-box {
+            width: 45%;
+            text-align: center;
+            border-top: 1px solid #333;
+            padding-top: 10px;
+            font-size: 12px;
+          }
+          
+          @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-name">A1 Tailor & Designer</div>
+          <div class="company-subtitle">Gents-Ladies Tailor & Fashion Designer</div>
+          <div class="company-subtitle">Belwatika, Near Mohi Tailors, Daltonganj | Mob: 7482621237, 9525519989</div>
+        </div>
+        
+        <div class="customer-info">
+          <h2>Customer Measurements</h2>
+          <div class="info-row">
+            <span><strong>Customer Name:</strong> ${customerName}</span>
+            <span><strong>Date:</strong> ${currentDate}</span>
+          </div>
+          <div class="info-row">
+            <span><strong>Garment Type:</strong> ${garmentType.toUpperCase()}</span>
+            <span><strong>Customer ID:</strong> ${customerId !== 'temp-customer' ? customerId : 'N/A'}</span>
+          </div>
+        </div>
+        
+        <div class="garment-title">MEASUREMENT ${garmentType.toUpperCase()}</div>
+        
+        ${measurementsHTML}
+        
+        ${measurementsHTML ? '' : '<div style="text-align: center; padding: 40px; color: #666;">No measurements recorded yet.</div>'}
+        
+        <div class="signature-section">
+          <div class="signature-box">
+            Customer Signature
+          </div>
+          <div class="signature-box">
+            Tailor Signature
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Thank You for choosing A1 Tailor & Designer!</strong></p>
+          <p>Quality Tailoring Services • Professional Stitching • Customer Satisfaction</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Small delay to ensure content is loaded before printing
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+
+    toast({
+      title: 'Print Initiated',
+      description: 'Measurement details sent to printer.',
+    });
+  };
+
   const handleClear = () => {
     const clearedMeasurements: Record<string, string> = {};
     garmentConfig.sections.forEach(section => {
@@ -439,12 +661,14 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
   const renderField = (field: MeasurementField) => {
     if (field.unit === 'text') {
       return (
-        <Input
-          value={measurements[field.name] || ''}
-          onChange={(e) => handleMeasurementChange(field.name, e.target.value)}
-          className="w-40 bg-white border-gray-900 text-black font-semibold"
-          placeholder="Enter text"
-        />
+        <div className="w-full">
+          <Textarea
+            value={measurements[field.name] || ''}
+            onChange={(e) => handleMeasurementChange(field.name, e.target.value)}
+            className="w-full min-h-[60px] bg-white border-gray-900 text-black font-semibold resize-y"
+            placeholder="Enter text and resize as needed..."
+          />
+        </div>
       );
     } else {
       return (
@@ -453,58 +677,11 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
           step="0.25"
           value={measurements[field.name] || ''}
           onChange={(e) => handleMeasurementChange(field.name, e.target.value)}
-          className="w-40 bg-white border-gray-900 text-black font-semibold"
+          className="w-full bg-white border-gray-900 text-black font-semibold"
           placeholder="0.00"
         />
       );
     }
-  };
-
-  const getAvailableGarmentTypes = () => {
-    const availableTypes = [];
-    selectedGarments.forEach(garment => {
-      const garmentLower = garment.toLowerCase();
-      if (garmentLower.includes('shirt') && !garmentLower.includes('pant')) {
-        availableTypes.push({ value: 'shirt', label: 'Shirt' });
-      } else if (garmentLower.includes('pant') || garmentLower.includes('wizar')) {
-        if (garmentLower.includes('non') && garmentLower.includes('denim')) {
-          availableTypes.push({ value: 'non_denim_pant', label: 'Non Denim Pant' });
-        } else {
-          availableTypes.push({ value: 'pant', label: 'Pant' });
-        }
-      } else if (garmentLower.includes('kurta')) {
-        if (garmentLower.includes('short')) {
-          availableTypes.push({ value: 'short_kurta', label: 'Short Kurta' });
-        } else {
-          availableTypes.push({ value: 'kurta', label: 'Kurta' });
-        }
-      } else if (garmentLower.includes('pajama')) {
-        availableTypes.push({ value: 'pajama', label: 'Pajama' });
-      } else if (garmentLower.includes('coat')) {
-        availableTypes.push({ value: 'coat', label: 'Coat' });
-      } else if (garmentLower.includes('bandi')) {
-        availableTypes.push({ value: 'bandi', label: 'Bandi' });
-      } else if (garmentLower.includes('westcot')) {
-        availableTypes.push({ value: 'westcot', label: 'Westcot' });
-      }
-    });
-    
-    const uniqueTypes = availableTypes.filter((type, index, self) => 
-      index === self.findIndex(t => t.value === type.value)
-    );
-    
-    return uniqueTypes.length > 0 ? uniqueTypes : [
-      { value: 'shirt', label: 'Shirt' },
-      { value: 'pant', label: 'Pant' },
-      { value: 'kurta', label: 'Kurta' },
-      { value: 'short_kurta', label: 'Short Kurta' },
-      { value: 'pajama', label: 'Pajama' },
-      { value: 'coat', label: 'Coat' },
-
-      { value: 'bandi', label: 'Bandi' },
-      { value: 'westcot', label: 'Westcot' },
-      { value: 'non_denim_pant', label: 'Non Denim Pant' }
-    ];
   };
 
   return (
@@ -515,30 +692,13 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
         <div className="relative -mx-6 -mt-6 mb-6 bg-gradient-to-r from-gray-900 to-gray-800 p-6 border-b-4 border-gray-900">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-white text-center tracking-wide">
-              MEASUREMENT DETAILS
+              MEASUREMENT {garmentType ? garmentType.toUpperCase() : 'DETAILS'}
             </DialogTitle>
           </DialogHeader>
           
           <div className="mt-4 text-center">
             <p className="text-white text-lg font-semibold">Customer: {customerName}</p>
           </div>
-        </div>
-
-        {/* Garment Type Selection */}
-        <div className="flex justify-center items-center space-x-4 mb-6">
-          <Label className="text-lg font-bold text-gray-900">Garment Type:</Label>
-          <Select value={selectedGarmentType} onValueChange={setSelectedGarmentType}>
-            <SelectTrigger className="w-40 bg-white border-gray-900 text-black font-semibold">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {getAvailableGarmentTypes().map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         {/* Measurements Grid with Professional Layout - Organized by Sections */}
@@ -553,13 +713,15 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
               </div>
               
               {/* Section Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                 {section.fields.map((field) => (
-                  <div key={field.name} className="grid grid-cols-2 gap-2 items-center">
-                    <Label className="bg-gray-800 text-white px-3 py-2 rounded font-bold text-xs text-center uppercase tracking-wide">
+                  <div key={field.name} className="space-y-2">
+                    <Label className="bg-gray-800 text-white px-3 py-2 rounded font-bold text-xs text-center uppercase tracking-wide block w-full">
                       {field.label}
                     </Label>
-                    {renderField(field)}
+                    <div className="w-full">
+                      {renderField(field)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -575,6 +737,15 @@ const MeasurementModal: React.FC<MeasurementModalProps> = ({
             className="border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white px-8 py-3 font-bold"
           >
             Clear All
+          </Button>
+          
+          <Button
+            onClick={handlePrint}
+            variant="outline"
+            className="border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white px-8 py-3 font-bold flex items-center gap-2"
+          >
+            <Printer className="w-4 h-4" />
+            Print Measurements
           </Button>
           
           <Button

@@ -30,7 +30,6 @@ import {
   Filter,
   TrendingUp,
   DollarSign,
-  RefreshCw,
   Download,
   FileText,
   Mail,
@@ -41,7 +40,8 @@ import {
   Users,
   Wallet,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  RefreshCw
 } from 'lucide-react';
 
 interface Payment {
@@ -205,7 +205,18 @@ const Payments: React.FC = () => {
         throw ordersError;
       }
 
-      const validOrders = ordersData?.filter(order => order.customers) || [];
+      console.log('Raw orders data:', ordersData);
+      console.log('Number of orders fetched:', ordersData?.length || 0);
+
+      const validOrders = ordersData?.filter(order => {
+        const isValid = order.customers && order.order_number && order.balance_amount > 0;
+        if (!isValid) {
+          console.log('Invalid order filtered out:', order);
+        }
+        return isValid;
+      }) || [];
+      
+      console.log('Valid orders after filtering:', validOrders.length);
       setOutstandingOrders(validOrders);
 
       // Calculate statistics
@@ -673,37 +684,27 @@ const Payments: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
-      <div className="w-full space-y-8 p-6">
-        {/* Header */}
-        <div className="backdrop-blur-xl bg-gradient-to-r from-white/95 via-purple-50/90 to-blue-50/95 border-2 border-purple-200/50 rounded-3xl shadow-2xl p-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="space-y-4">
-              <h1 className="text-3xl font-bold text-black flex items-center gap-4">
-                <div className="p-4 bg-gradient-to-r from-purple-500 via-blue-500 to-indigo-500 rounded-2xl shadow-xl">
-                  <Wallet className="h-12 w-12 text-black" />
-                </div>
-                Payment Management Center
+    <div className="min-h-screen bg-gray-50">
+      <div className="w-full pl-4 pr-2 sm:pl-8 sm:pr-4 lg:pl-12 lg:pr-6 py-3 sm:py-6 space-y-4 sm:space-y-6">
+        {/* Header - Responsive */}
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+          <div className="flex flex-col space-y-4 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+            <div>
+              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-gray-900 flex items-center space-x-2 sm:space-x-3">
+                <Wallet className="h-6 w-6 sm:h-10 sm:w-10 text-gray-900" />
+                <span>Payment Management</span>
               </h1>
-              <p className="text-gray-700 text-xl font-medium">
-                Complete payment processing with analytics, reminders & reporting
+              <p className="text-gray-600 mt-2 text-sm sm:text-lg">
+                Complete payment processing with analytics and reporting
               </p>
             </div>
             
-            <div className="flex gap-4">
-              <Button 
-                onClick={fetchData} 
-                variant="outline" 
-                className="backdrop-blur-sm bg-white/70 border-2 border-purple-200 hover:bg-purple-50"
-              >
-                <RefreshCw className="h-5 w-5 mr-2" />
-                Refresh
-              </Button>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <Button 
                 onClick={() => setIsAddPaymentOpen(true)} 
-                className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                className="bg-gray-900 hover:bg-gray-800 text-white"
               >
-                <Plus className="h-5 w-5 mr-2" />
+                <Plus className="h-4 w-4 mr-2" />
                 Add Payment
               </Button>
             </div>
@@ -711,152 +712,152 @@ const Payments: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="backdrop-blur-xl bg-white/90 border-2 border-purple-200/50 rounded-3xl shadow-2xl overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="bg-gradient-to-r from-purple-100/80 to-blue-100/80 p-6">
-              <TabsList className="grid w-full grid-cols-6 bg-white/50 backdrop-blur-sm rounded-2xl p-2">
-                <TabsTrigger value="dashboard" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-blue-500 data-[state=active]:text-black rounded-xl font-semibold">
+            <div className="p-4 sm:p-6">
+              <TabsList className="grid w-full grid-cols-6 bg-gray-100">
+                <TabsTrigger value="dashboard" className="data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                   Dashboard
                 </TabsTrigger>
-                <TabsTrigger value="history" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="history" className="data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                   Payment History
                 </TabsTrigger>
-                <TabsTrigger value="collect" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="collect" className="data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                   Collect Payment
                 </TabsTrigger>
-                <TabsTrigger value="due" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-pink-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="due" className="data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                   Due Payments
                 </TabsTrigger>
-                <TabsTrigger value="refunds" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-yellow-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="refunds" className="data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                   Refunds
                 </TabsTrigger>
-                <TabsTrigger value="reports" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-black rounded-xl font-semibold">
+                <TabsTrigger value="reports" className="data-[state=active]:bg-gray-900 data-[state=active]:text-white">
                   Reports
                 </TabsTrigger>
               </TabsList>
             </div>
 
             {/* Dashboard Tab */}
-            <TabsContent value="dashboard" className="p-8 space-y-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-6">Payment Dashboard</h2>
+            <TabsContent value="dashboard" className="p-4 sm:p-6 space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Payment Dashboard</h2>
               
               {/* Summary Cards */}
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="bg-gradient-to-br from-green-50 to-emerald-100 border-2 border-green-200/50 shadow-xl hover:shadow-2xl transition-all">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="bg-white border shadow-sm hover:shadow-md transition-all">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-green-700 font-bold">Total Revenue</CardTitle>
-                      <div className="p-3 bg-green-500 rounded-xl">
-                        <DollarSign className="h-6 w-6 text-black" />
+                      <CardTitle className="text-gray-700 font-bold">Total Revenue</CardTitle>
+                      <div className="p-2 bg-gray-100 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-gray-600" />
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-black text-green-800">{formatCurrency(paymentStats.totalRevenue)}</div>
-                    <p className="text-green-600 text-sm mt-2 flex items-center">
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatCurrency(paymentStats.totalRevenue)}</div>
+                    <p className="text-gray-600 text-sm mt-2 flex items-center">
                       <ArrowUpRight className="h-4 w-4 mr-1" />
                       {paymentStats.totalTransactions} transactions
                     </p>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-red-50 to-rose-100 border-2 border-red-200/50 shadow-xl hover:shadow-2xl transition-all">
+                <Card className="bg-white border shadow-sm hover:shadow-md transition-all">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-red-700 font-bold">Pending Payments</CardTitle>
-                      <div className="p-3 bg-red-500 rounded-xl">
-                        <AlertCircle className="h-6 w-6 text-black" />
+                      <CardTitle className="text-gray-700 font-bold">Pending Payments</CardTitle>
+                      <div className="p-2 bg-gray-100 rounded-lg">
+                        <AlertCircle className="h-5 w-5 text-gray-600" />
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-black text-red-800">{formatCurrency(paymentStats.pendingPayments)}</div>
-                    <p className="text-red-600 text-sm mt-2 flex items-center">
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatCurrency(paymentStats.pendingPayments)}</div>
+                    <p className="text-gray-600 text-sm mt-2 flex items-center">
                       <Clock className="h-4 w-4 mr-1" />
                       {outstandingOrders.length} orders pending
                     </p>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-blue-50 to-cyan-100 border-2 border-blue-200/50 shadow-xl hover:shadow-2xl transition-all">
+                <Card className="bg-white border shadow-sm hover:shadow-md transition-all">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-blue-700 font-bold">Collected Today</CardTitle>
-                      <div className="p-3 bg-blue-500 rounded-xl">
-                        <Calendar className="h-6 w-6 text-black" />
+                      <CardTitle className="text-gray-700 font-bold">Collected Today</CardTitle>
+                      <div className="p-2 bg-gray-100 rounded-lg">
+                        <Calendar className="h-5 w-5 text-gray-600" />
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-black text-blue-800">{formatCurrency(paymentStats.collectedToday)}</div>
-                    <p className="text-blue-600 text-sm mt-2">Today's collections</p>
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatCurrency(paymentStats.collectedToday)}</div>
+                    <p className="text-gray-600 text-sm mt-2">Today's collections</p>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-purple-50 to-violet-100 border-2 border-purple-200/50 shadow-xl hover:shadow-2xl transition-all">
+                <Card className="bg-white border shadow-sm hover:shadow-md transition-all">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-purple-700 font-bold">This Month</CardTitle>
-                      <div className="p-3 bg-purple-500 rounded-xl">
-                        <TrendingUp className="h-6 w-6 text-black" />
+                      <CardTitle className="text-gray-700 font-bold">This Month</CardTitle>
+                      <div className="p-2 bg-gray-100 rounded-lg">
+                        <TrendingUp className="h-5 w-5 text-gray-600" />
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-black text-purple-800">{formatCurrency(paymentStats.collectedThisMonth)}</div>
-                    <p className="text-purple-600 text-sm mt-2">Monthly total</p>
+                    <div className="text-2xl sm:text-3xl font-bold text-gray-900">{formatCurrency(paymentStats.collectedThisMonth)}</div>
+                    <p className="text-gray-600 text-sm mt-2">Monthly total</p>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Quick Charts */}
-              <div className="grid gap-8 md:grid-cols-2">
-                <Card className="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200/50 shadow-xl">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card className="bg-white border shadow-sm">
                   <CardHeader>
-                    <CardTitle className="flex items-center text-gray-800">
-                      <PieChart className="h-6 w-6 mr-2" />
+                    <CardTitle className="flex items-center text-gray-900">
+                      <PieChart className="h-5 w-5 mr-2" />
                       Payment Methods
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
                         <div className="flex items-center">
-                          <Banknote className="h-5 w-5 text-green-600 mr-2" />
-                          <span className="font-semibold text-green-700">Cash</span>
+                          <Banknote className="h-4 w-4 text-gray-600 mr-2" />
+                          <span className="font-medium text-gray-700">Cash</span>
                         </div>
-                        <span className="font-bold text-green-800">{formatCurrency(paymentStats.cashPayments)}</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(paymentStats.cashPayments)}</span>
                       </div>
-                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
                         <div className="flex items-center">
-                          <Smartphone className="h-5 w-5 text-blue-600 mr-2" />
-                          <span className="font-semibold text-blue-700">Online</span>
+                          <Smartphone className="h-4 w-4 text-gray-600 mr-2" />
+                          <span className="font-medium text-gray-700">Online</span>
                         </div>
-                        <span className="font-bold text-blue-800">{formatCurrency(paymentStats.onlinePayments)}</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(paymentStats.onlinePayments)}</span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200/50 shadow-xl">
+                <Card className="bg-white border shadow-sm">
                   <CardHeader>
-                    <CardTitle className="flex items-center text-gray-800">
-                      <BarChart3 className="h-6 w-6 mr-2" />
+                    <CardTitle className="flex items-center text-gray-900">
+                      <BarChart3 className="h-5 w-5 mr-2" />
                       Collection Trends
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center p-3 bg-emerald-50 rounded-lg">
-                        <span className="font-semibold text-emerald-700">Collection Rate</span>
-                        <span className="font-bold text-emerald-800">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+                        <span className="font-medium text-gray-700">Collection Rate</span>
+                        <span className="font-bold text-gray-900">
                           {paymentStats.totalRevenue > 0 ? 
                             Math.round((paymentStats.totalRevenue / (paymentStats.totalRevenue + paymentStats.pendingPayments)) * 100) : 0}%
                         </span>
                       </div>
-                      <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-                        <span className="font-semibold text-orange-700">Overdue Amount</span>
-                        <span className="font-bold text-orange-800">{formatCurrency(paymentStats.overduePayments)}</span>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+                        <span className="font-medium text-gray-700">Overdue Amount</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(paymentStats.overduePayments)}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -865,10 +866,10 @@ const Payments: React.FC = () => {
             </TabsContent>
 
             {/* Payment History Tab */}
-            <TabsContent value="history" className="p-8 space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-800">Payment History</h2>
-                <div className="flex gap-4">
+            <TabsContent value="history" className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h2 className="text-2xl font-bold text-gray-900">Payment History</h2>
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <Input
@@ -878,14 +879,14 @@ const Payments: React.FC = () => {
                         setSearchTerm(e.target.value);
                         setCurrentPage(1); // Reset to first page when searching
                       }}
-                      className="pl-10 w-64"
+                      className="pl-10 w-full sm:w-64 border-gray-300 focus:border-gray-900 focus:ring-gray-900"
                     />
                   </div>
                   <Select value={filterMethod} onValueChange={(value) => {
                     setFilterMethod(value);
                     setCurrentPage(1); // Reset to first page when filtering
                   }}>
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger className="w-full sm:w-40 border-gray-300 focus:border-gray-900 focus:ring-gray-900">
                       <SelectValue placeholder="Filter by method" />
                     </SelectTrigger>
                     <SelectContent>
@@ -899,17 +900,18 @@ const Payments: React.FC = () => {
                 </div>
               </div>
 
-              <Card className="bg-white border-2 border-gray-200/50 shadow-xl">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order ID</TableHead>
-                      <TableHead>Customer Name</TableHead>
-                      <TableHead>Payment Date</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+              <Card className="bg-white border shadow-sm">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="font-semibold text-gray-900">Order ID</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Customer Name</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Payment Date</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Method</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Amount</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Status</TableHead>
+                        <TableHead className="font-semibold text-gray-900">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -989,6 +991,7 @@ const Payments: React.FC = () => {
                     })()}
                   </TableBody>
                 </Table>
+                </div>
 
                 {/* Pagination Controls */}
                 {(() => {
@@ -1005,7 +1008,7 @@ const Payments: React.FC = () => {
                   if (totalPages <= 1) return null;
 
                   return (
-                    <div className="flex items-center justify-between p-6 border-t">
+                    <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t bg-gray-50 gap-4">
                       <div className="text-sm text-gray-600">
                         Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} payments
                       </div>
@@ -1017,7 +1020,7 @@ const Payments: React.FC = () => {
                           size="sm"
                           onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                           disabled={currentPage === 1}
-                          className="px-3"
+                          className="px-3 border-gray-300 hover:bg-gray-100"
                         >
                           Previous
                         </Button>
@@ -1064,7 +1067,7 @@ const Payments: React.FC = () => {
                           size="sm"
                           onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                           disabled={currentPage === totalPages}
-                          className="px-3"
+                          className="px-3 border-gray-300 hover:bg-gray-100"
                         >
                           Next
                         </Button>
@@ -1076,55 +1079,90 @@ const Payments: React.FC = () => {
             </TabsContent>
 
             {/* Collect Payment Tab */}
-            <TabsContent value="collect" className="p-8 space-y-6">
-              <h2 className="text-3xl font-bold text-gray-800">Add / Collect Payment</h2>
+            <TabsContent value="collect" className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Add / Collect Payment</h2>
               
-              <div className="grid gap-8 lg:grid-cols-2">
+              <div className="flex flex-col lg:flex-row gap-4">
                 {/* Order Selection */}
-                <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200/50 shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-blue-800">Select Customer / Order</CardTitle>
-                    <CardDescription>Choose an outstanding order to record payment</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="max-h-64 overflow-y-auto space-y-3">
-                      {outstandingOrders.map((order) => (
-                        <div
-                          key={order.id}
-                          className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                            selectedOrder?.id === order.id
-                              ? 'border-blue-500 bg-blue-100'
-                              : 'border-gray-200 hover:border-blue-300 bg-white'
-                          }`}
-                          onClick={() => setSelectedOrder(order)}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-bold text-lg">{order.order_number}</p>
-                              <p className="text-sm text-gray-600">{order.customers?.name}</p>
-                              <p className="text-xs text-gray-500">📱 {order.customers?.mobile}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-gray-600">Total: {formatCurrency(order.total_amount)}</p>
-                              <p className="font-bold text-red-600">Due: {formatCurrency(order.balance_amount)}</p>
-                            </div>
-                          </div>
+                <div className="lg:w-1/2">
+                  <Card className="bg-white border shadow-sm h-full">
+                    <CardHeader>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <CardTitle className="text-gray-900">Select Customer / Order</CardTitle>
+                          <CardDescription>Choose an outstanding order to record payment</CardDescription>
                         </div>
-                      ))}
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => fetchData()}
+                          disabled={loading}
+                          className="border-gray-80 text-gray-600 hover:bg-gray-50"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                  <CardContent>
+                    <div className="max-h-500 overflow-y-auto">
+                      {loading ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2"></div>
+                          <p className="text-gray-500 font-medium">Loading orders...</p>
+                        </div>
+                      ) : outstandingOrders.length === 0 ? (
+                        <div className="text-center py-8">
+                          <div className="text-gray-400 mb-2">
+                            <svg className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <p className="text-gray-500 font-medium">No Outstanding Orders</p>
+                          <p className="text-gray-400 text-sm">All orders have been fully paid</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {outstandingOrders.map((order) => (
+                            <div
+                              key={order.id}
+                              className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                                selectedOrder?.id === order.id
+                                  ? 'border-gray-900 bg-gray-50'
+                                  : 'border-gray-200 hover:border-gray-400 bg-white'
+                              }`}
+                              onClick={() => setSelectedOrder(order)}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-bold text-lg text-gray-900">{order.order_number || 'No Order Number'}</p>
+                                  <p className="text-sm text-gray-600">{order.customers?.name || 'No Customer Name'}</p>
+                                  <p className="text-xs text-gray-500">📱 {order.customers?.mobile || 'No Mobile'}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm text-gray-600">Total: {formatCurrency(order.total_amount || 0)}</p>
+                                  <p className="font-bold text-gray-900">Due: {formatCurrency(order.balance_amount || 0)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
-                </Card>
+                  </Card>
+                </div>
 
                 {/* Payment Form */}
-                <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200/50 shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-green-800">Payment Details</CardTitle>
-                    <CardDescription>Enter payment information</CardDescription>
-                  </CardHeader>
+                <div className="lg:w-1/2">
+                  <Card className="bg-white border shadow-sm h-full">
+                    <CardHeader>
+                      <CardTitle className="text-gray-900">Payment Details</CardTitle>
+                      <CardDescription>Enter payment information</CardDescription>
+                    </CardHeader>
                   <CardContent className="space-y-6">
                     {selectedOrder && (
-                      <div className="p-4 bg-white rounded-xl border border-green-200">
-                        <h3 className="font-bold text-green-800 mb-2">Order Summary</h3>
+                      <div className="p-4 bg-gray-50 rounded-lg border">
+                        <h3 className="font-bold text-gray-900 mb-2">Order Summary</h3>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <span className="text-gray-600">Order:</span>
@@ -1140,7 +1178,7 @@ const Payments: React.FC = () => {
                           </div>
                           <div>
                             <span className="text-gray-600">Balance Due:</span>
-                            <p className="font-bold text-red-600">{formatCurrency(selectedOrder.balance_amount)}</p>
+                            <p className="font-bold text-gray-900">{formatCurrency(selectedOrder.balance_amount)}</p>
                           </div>
                         </div>
                       </div>
@@ -1197,7 +1235,7 @@ const Payments: React.FC = () => {
 
                       <Button 
                         onClick={handleAddPayment}
-                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-black font-bold py-3"
+                        className="w-full bg-gray-900 hover:bg-gray-700 text-white font-medium py-3"
                         disabled={!selectedOrder || !paymentForm.amount}
                       >
                         <CheckCircle className="h-5 w-5 mr-2" />
@@ -1206,13 +1244,14 @@ const Payments: React.FC = () => {
                     </div>
                   </CardContent>
                 </Card>
+                </div>
               </div>
             </TabsContent>
 
             {/* Due Payments Tab */}
-            <TabsContent value="due" className="p-8 space-y-6">
+            <TabsContent value="due" className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-800">Due Payments</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Due Payments</h2>
                 <Select value={dueDateFilter} onValueChange={setDueDateFilter}>
                   <SelectTrigger className="w-48">
                     <SelectValue placeholder="Filter by due date" />
@@ -1229,30 +1268,30 @@ const Payments: React.FC = () => {
 
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {outstandingOrders.map((order) => (
-                  <Card key={order.id} className="bg-gradient-to-br from-red-50 to-rose-50 border-2 border-red-200/50 shadow-xl hover:shadow-2xl transition-all">
+                  <Card key={order.id} className="bg-white border shadow-sm hover:shadow-md transition-all">
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-start">
                         <div>
-                          <CardTitle className="text-red-800">{order.order_number}</CardTitle>
-                          <CardDescription className="text-red-600">{order.customers?.name}</CardDescription>
+                          <CardTitle className="text-gray-900">{order.order_number}</CardTitle>
+                          <CardDescription className="text-gray-600">{order.customers?.name}</CardDescription>
                         </div>
-                        <Badge className="bg-red-500 text-black">Due</Badge>
+                        <Badge className="bg-gray-900 text-white">Due</Badge>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="p-3 bg-white rounded-lg">
+                      <div className="p-3 bg-gray-50 rounded-lg border">
                         <div className="flex justify-between text-sm">
                           <span>Total Amount:</span>
                           <span className="font-semibold">{formatCurrency(order.total_amount)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span>Amount Paid:</span>
-                          <span className="font-semibold text-green-600">{formatCurrency(order.advance_amount)}</span>
+                          <span className="font-semibold text-gray-600">{formatCurrency(order.advance_amount)}</span>
                         </div>
                         <div className="border-t pt-2 mt-2">
                           <div className="flex justify-between">
                             <span className="font-bold">Balance Due:</span>
-                            <span className="font-bold text-red-600">{formatCurrency(order.balance_amount)}</span>
+                            <span className="font-bold text-gray-900">{formatCurrency(order.balance_amount)}</span>
                           </div>
                         </div>
                       </div>
@@ -1260,7 +1299,7 @@ const Payments: React.FC = () => {
                       <div className="flex gap-2">
                         <Button 
                           size="sm" 
-                          className="flex-1 bg-blue-500 hover:bg-blue-600"
+                          className="flex-1 bg-gray-900 hover:bg-gray-700 text-white"
                           onClick={() => {
                             setSelectedOrder(order);
                             setActiveTab('collect');
@@ -1269,13 +1308,13 @@ const Payments: React.FC = () => {
                           <Plus className="h-4 w-4 mr-1" />
                           Pay
                         </Button>
-                        <Button size="sm" variant="outline" className="border-green-500 text-green-600 hover:bg-green-50">
+                        <Button size="sm" variant="outline" className="border-gray-300 text-gray-600 hover:bg-gray-50">
                           <MessageSquare className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="outline" className="border-blue-500 text-blue-600 hover:bg-blue-50">
+                        <Button size="sm" variant="outline" className="border-gray-300 text-gray-600 hover:bg-gray-50">
                           <Mail className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="outline" className="border-purple-500 text-purple-600 hover:bg-purple-50">
+                        <Button size="sm" variant="outline" className="border-gray-300 text-gray-600 hover:bg-gray-50">
                           <Phone className="h-4 w-4" />
                         </Button>
                       </div>
@@ -1286,34 +1325,34 @@ const Payments: React.FC = () => {
             </TabsContent>
 
             {/* Refunds Tab */}
-            <TabsContent value="refunds" className="p-8 space-y-6">
-              <h2 className="text-3xl font-bold text-gray-800">Refunds & Adjustments</h2>
+            <TabsContent value="refunds" className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Refunds & Adjustments</h2>
               
               <div className="grid gap-8 lg:grid-cols-2">
-                <Card className="bg-gradient-to-br from-orange-50 to-yellow-50 border-2 border-orange-200/50 shadow-xl">
+                <Card className="bg-white border shadow-sm">
                   <CardHeader>
-                    <CardTitle className="text-orange-800">Record Refund</CardTitle>
+                    <CardTitle className="text-gray-900">Record Refund</CardTitle>
                     <CardDescription>Process refunds and adjustments</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="text-center py-12">
-                      <Receipt className="h-16 w-16 text-orange-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold text-orange-700 mb-2">Refund Management</h3>
-                      <p className="text-orange-600">Feature coming soon...</p>
+                      <Receipt className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-700 mb-2">Refund Management</h3>
+                      <p className="text-gray-600">Feature coming soon...</p>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-200/50 shadow-xl">
+                <Card className="bg-white border shadow-sm">
                   <CardHeader>
-                    <CardTitle className="text-yellow-800">Recent Adjustments</CardTitle>
+                    <CardTitle className="text-gray-900">Recent Adjustments</CardTitle>
                     <CardDescription>View recent refunds and adjustments</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center py-12">
-                      <Edit className="h-16 w-16 text-yellow-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold text-yellow-700 mb-2">No Adjustments</h3>
-                      <p className="text-yellow-600">No refunds or adjustments recorded yet.</p>
+                      <Edit className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-700 mb-2">No Adjustments</h3>
+                      <p className="text-gray-600">No refunds or adjustments recorded yet.</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -1321,28 +1360,28 @@ const Payments: React.FC = () => {
             </TabsContent>
 
             {/* Reports Tab */}
-            <TabsContent value="reports" className="p-8 space-y-6">
-              <h2 className="text-3xl font-bold text-gray-800">Reports & Analytics</h2>
+            <TabsContent value="reports" className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Reports & Analytics</h2>
               
               <div className="grid gap-8 lg:grid-cols-2">
-                <Card className="bg-gradient-to-br from-violet-50 to-purple-50 border-2 border-violet-200/50 shadow-xl">
+                <Card className="bg-white border shadow-sm">
                   <CardHeader>
-                    <CardTitle className="flex items-center text-violet-800">
+                    <CardTitle className="flex items-center text-gray-900">
                       <BarChart3 className="h-6 w-6 mr-2" />
                       Payment Analytics
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid gap-4">
-                      <div className="flex justify-between items-center p-3 bg-white rounded-lg">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
                         <span className="font-semibold">Cash vs Online</span>
-                        <span className="text-violet-600">
+                        <span className="text-gray-600">
                           {Math.round((paymentStats.cashPayments / (paymentStats.cashPayments + paymentStats.onlinePayments)) * 100) || 0}% Cash
                         </span>
                       </div>
-                      <div className="flex justify-between items-center p-3 bg-white rounded-lg">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
                         <span className="font-semibold">Collection Efficiency</span>
-                        <span className="text-violet-600">
+                        <span className="text-gray-600">
                           {Math.round((paymentStats.totalRevenue / (paymentStats.totalRevenue + paymentStats.pendingPayments)) * 100) || 0}%
                         </span>
                       </div>
@@ -1350,35 +1389,35 @@ const Payments: React.FC = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200/50 shadow-xl">
+                <Card className="bg-white border shadow-sm">
                   <CardHeader>
-                    <CardTitle className="flex items-center text-purple-800">
+                    <CardTitle className="flex items-center text-gray-900">
                       <Users className="h-6 w-6 mr-2" />
                       Customer Insights
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center py-12">
-                      <PieChart className="h-16 w-16 text-purple-400 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold text-purple-700 mb-2">Top Paying Customers</h3>
-                      <p className="text-purple-600">Detailed reports coming soon...</p>
+                      <PieChart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-700 mb-2">Top Paying Customers</h3>
+                      <p className="text-gray-600">Detailed reports coming soon...</p>
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              <Card className="bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200/50 shadow-xl">
+              <Card className="bg-white border shadow-sm">
                 <CardHeader>
-                  <CardTitle className="flex items-center text-indigo-800">
+                  <CardTitle className="flex items-center text-gray-900">
                     <TrendingUp className="h-6 w-6 mr-2" />
                     Revenue Trends
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-center py-12">
-                    <BarChart3 className="h-16 w-16 text-indigo-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-indigo-700 mb-2">Monthly Revenue Trends</h3>
-                    <p className="text-indigo-600">Advanced analytics dashboard coming soon...</p>
+                    <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Monthly Revenue Trends</h3>
+                    <p className="text-gray-600">Advanced analytics dashboard coming soon...</p>
                   </div>
                 </CardContent>
               </Card>

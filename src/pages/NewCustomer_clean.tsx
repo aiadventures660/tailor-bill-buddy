@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserPlus, Calendar, Shirt, Package, Scissors, Users, RefreshCw, Save, ArrowLeft } from 'lucide-react';
+import { UserPlus, Calendar, Shirt, Package, Scissors, Users, DollarSign, RefreshCw, Save, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import MeasurementModal from '@/components/MeasurementModal';
 
@@ -33,7 +33,10 @@ const NewCustomer = () => {
     address: '',
     contactNo: '',
     date: new Date().toISOString().split('T')[0],
-    deliveryDate: '',
+    deliveryDate: new Date().toISOString().split('T')[0],
+    totalCost: 0,
+    advance: 0,
+    remaining: 0,
   });
 
   // Order type selection
@@ -57,13 +60,22 @@ const NewCustomer = () => {
   const [measurementModalOpen, setMeasurementModalOpen] = useState(false);
   const [selectedGarmentForMeasurement, setSelectedGarmentForMeasurement] = useState<string>('');
   const [currentCustomerId, setCurrentCustomerId] = useState<string>('');
-  const [tempMeasurements, setTempMeasurements] = useState<Record<string, Record<string, string>>>({});
 
   const handleInputChange = (field: string, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+    
+    // Auto-calculate remaining amount
+    if (field === 'totalCost' || field === 'advance') {
+      const total = field === 'totalCost' ? Number(value) : formData.totalCost;
+      const advance = field === 'advance' ? Number(value) : formData.advance;
+      setFormData(prev => ({
+        ...prev,
+        remaining: total - advance
+      }));
+    }
   };
 
   const handleGarmentToggle = (garmentId: string) => {
@@ -98,11 +110,11 @@ const NewCustomer = () => {
       return;
     }
 
-    // Check if basic customer info is filled
-    if (!formData.firstName || !formData.contactNo) {
+    // Check if customer is saved
+    if (!currentCustomerId) {
       toast({
-        title: 'Customer Information Required',
-        description: 'Please fill in customer name and contact number before taking measurements',
+        title: 'Save Customer First',
+        description: 'Please save the customer record before taking measurements',
         variant: 'destructive',
       });
       return;
@@ -181,9 +193,9 @@ const NewCustomer = () => {
         order_number: orderNumber,
         created_by: profile?.id || '',
         due_date: formData.deliveryDate,
-        total_amount: 0,
-        advance_amount: 0,
-        balance_amount: 0,
+        total_amount: formData.totalCost,
+        advance_amount: formData.advance,
+        balance_amount: formData.remaining,
         status: 'pending' as const,
       };
 
@@ -245,64 +257,13 @@ const NewCustomer = () => {
       // Store customer ID for measurements
       setCurrentCustomerId(customer.id);
 
-      // Save any temporarily stored measurements
-      if (Object.keys(tempMeasurements).length > 0) {
-        try {
-          for (const [garmentType, measurements] of Object.entries(tempMeasurements)) {
-            // Map garment types to database clothing_type enum values
-            let clothingType: 'shirt' | 'pant' | 'kurta_pajama' | 'suit' | 'blouse' | 'saree_blouse' = 'shirt';
-            
-            const lowerGarmentType = garmentType.toLowerCase();
-            if (lowerGarmentType.includes('pant')) {
-              clothingType = 'pant';
-            } else if (lowerGarmentType.includes('kurta') || lowerGarmentType.includes('pajama')) {
-              clothingType = 'kurta_pajama';
-            } else if (lowerGarmentType.includes('suit') || lowerGarmentType.includes('coat')) {
-              clothingType = 'suit';
-            } else if (lowerGarmentType.includes('blouse')) {
-              clothingType = 'blouse';
-            } else if (lowerGarmentType.includes('saree')) {
-              clothingType = 'saree_blouse';
-            } else {
-              clothingType = 'shirt'; // Default to shirt for other types
-            }
-
-            const measurementData = {
-              customer_id: customer.id,
-              clothing_type: clothingType,
-              measurements: measurements,
-              created_at: new Date().toISOString(),
-            };
-
-            const { error: measurementError } = await supabase
-              .from('measurements')
-              .insert([measurementData]);
-
-            if (measurementError) {
-              console.error('Error saving measurements for', garmentType, ':', measurementError);
-            }
-          }
-          
-          // Clear temporary measurements after saving
-          setTempMeasurements({});
-        } catch (measurementSaveError) {
-          console.error('Error saving measurements:', measurementSaveError);
-          // Don't fail the whole operation if measurements fail to save
-        }
-      }
-
       const successMessage = existingCustomer 
         ? `Order created for existing customer: ${customer.name}!` 
         : 'Customer record saved successfully!';
 
-      const measurementCount = Object.keys(tempMeasurements).length;
-      const fullMessage = successMessage + 
-        (measurementCount > 0 ? ` ${measurementCount} measurement(s) also saved.` : '') + 
-        ' Redirecting to billing...';
-
       toast({
         title: 'Success',
-        description: fullMessage,
+        description: successMessage + ' Redirecting to billing...',
       });
 
       // Always redirect to billing after successful save
@@ -337,13 +298,15 @@ const NewCustomer = () => {
       address: '',
       contactNo: '',
       date: new Date().toISOString().split('T')[0],
-      deliveryDate: '',
+      deliveryDate: new Date().toISOString().split('T')[0],
+      totalCost: 0,
+      advance: 0,
+      remaining: 0,
     });
     setGarmentTypes(prev => prev.map(g => ({ ...g, selected: false, quantity: 0 })));
     setCurrentCustomerId('');
     setOrderType('ready_made');
     setNeedsMeasurements(false);
-    setTempMeasurements({}); // Clear any temporary measurements
   };
 
   const handleCancel = () => {
@@ -351,15 +314,9 @@ const NewCustomer = () => {
   };
 
   const handleMeasurementSave = (measurements: Record<string, string>) => {
-    // Store measurements temporarily for this garment type
-    setTempMeasurements(prev => ({
-      ...prev,
-      [selectedGarmentForMeasurement]: measurements
-    }));
-    
     toast({
-      title: 'Measurements Recorded',
-      description: `Measurements for ${selectedGarmentForMeasurement} have been recorded. They will be saved when you save the customer record.`,
+      title: 'Measurements Saved',
+      description: 'Customer measurements have been saved successfully.',
     });
     setMeasurementModalOpen(false);
   };
@@ -549,6 +506,51 @@ const NewCustomer = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Financial Information */}
+            <Card className="shadow-lg border-0 bg-white">
+              <CardHeader className="bg-gray-50 border-b">
+                <CardTitle className="flex items-center text-gray-900">
+                  <DollarSign className="h-5 w-5 mr-2" />
+                  Payment Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-gray-700 font-semibold text-sm">Total Cost (₹)</Label>
+                    <Input
+                      type="number"
+                      value={formData.totalCost}
+                      onChange={(e) => handleInputChange('totalCost', Number(e.target.value))}
+                      className="border-gray-300 focus:border-gray-900 focus:ring-gray-900 text-center font-semibold"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-gray-700 font-semibold text-sm">Advance (₹)</Label>
+                    <Input
+                      type="number"
+                      value={formData.advance}
+                      onChange={(e) => handleInputChange('advance', Number(e.target.value))}
+                      className="border-gray-300 focus:border-gray-900 focus:ring-gray-900 text-center font-semibold"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-gray-700 font-semibold text-sm">Remaining (₹)</Label>
+                    <Input
+                      type="number"
+                      value={formData.remaining}
+                      readOnly
+                      className="bg-gray-100 border-gray-300 text-center font-semibold text-gray-900"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Garment Selection */}
@@ -607,24 +609,17 @@ const NewCustomer = () => {
                       <>
                         <h4 className="font-semibold text-gray-900 mb-4 text-center">MEASUREMENT SCHEDULING</h4>
                         <div className="space-y-2">
-                          {garmentTypes.filter(g => g.selected && g.quantity > 0).map((garment) => {
-                            const hasMeasurements = tempMeasurements[garment.name];
-                            return (
-                              <Button
-                                key={garment.id}
-                                size="sm"
-                                className={`w-full font-medium h-9 text-xs ${
-                                  hasMeasurements 
-                                    ? 'bg-green-600 hover:bg-green-700 text-white' 
-                                    : 'bg-gray-900 hover:bg-gray-800 text-white'
-                                }`}
-                                onClick={() => handleTakeMeasurements(garment.id)}
-                              >
-                                <Scissors className="h-3 w-3 mr-2" />
-                                {hasMeasurements ? `✓ ${garment.name} Measured` : `Measure ${garment.name}`}
-                              </Button>
-                            );
-                          })}
+                          {garmentTypes.filter(g => g.selected && g.quantity > 0).map((garment) => (
+                            <Button
+                              key={garment.id}
+                              size="sm"
+                              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium h-9 text-xs"
+                              onClick={() => handleTakeMeasurements(garment.id)}
+                            >
+                              <Scissors className="h-3 w-3 mr-2" />
+                              Measure {garment.name}
+                            </Button>
+                          ))}
                         </div>
                       </>
                     ) : (
@@ -682,7 +677,7 @@ const NewCustomer = () => {
         isOpen={measurementModalOpen}
         onClose={() => setMeasurementModalOpen(false)}
         garmentType={selectedGarmentForMeasurement}
-        customerId={currentCustomerId || 'temp-customer'}
+        customerId={currentCustomerId}
         customerName={`${formData.firstName} ${formData.surname}`.trim()}
         selectedGarments={garmentTypes.filter(g => g.selected).map(g => g.name)}
         onSave={handleMeasurementSave}

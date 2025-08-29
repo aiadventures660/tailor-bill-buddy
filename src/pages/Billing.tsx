@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,7 +52,7 @@ interface InvoiceItem {
   unit_price: number;
   total_price: number;
   hsn_code?: string;
-  clothingType?: 'shirt' | 'pant' | 'suit' | 'kurta_pajama' | 'blouse' | 'saree_blouse';
+  clothingType?: 'shirt' | 'pant' | 'suit' | 'kurta_pajama' | 'blouse' | 'saree_blouse' | 'non_denim_pant' | 'short_kurta' | 'coat' | 'bandi' | 'westcot' | 'pajama';
   measurements?: {
     chest: string;
     shoulder: string;
@@ -85,6 +86,7 @@ interface Invoice {
 
 const Billing = () => {
   const { profile } = useAuth();
+  const location = useLocation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -136,6 +138,76 @@ const Billing = () => {
   useEffect(() => {
     calculateStats();
   }, [invoices]);
+
+  // Auto-populate billing data when coming from NewCustomer page
+  useEffect(() => {
+    if (location.state) {
+      const { customerId, customerName, orderData, garments } = location.state as {
+        customerId: string;
+        customerName: string;
+        orderData: any;
+        garments: any[];
+      };
+
+      // Set the customer
+      if (customerId && customerName) {
+        const customer: Customer = {
+          id: customerId,
+          name: customerName,
+          mobile: orderData?.customer_mobile || '',
+          email: orderData?.customer_email || '',
+          address: orderData?.customer_address || ''
+        };
+        setSelectedCustomer(customer);
+        setCustomerSearch(customerName);
+      }
+
+      // Auto-populate invoice items based on garments
+      if (garments && garments.length > 0) {
+        const autoItems: InvoiceItem[] = garments.map((garment: any, index: number) => ({
+          id: `auto-${index}`,
+          type: 'stitching' as const,
+          description: `${garment.name} - Custom Stitching (Qty: ${garment.quantity || 1})`,
+          quantity: garment.quantity || 1,
+          unit_price: 0, // No default pricing - user must set price manually
+          total_price: 0, // No default pricing - will be calculated when unit_price is set
+          clothingType: mapGarmentToClothingType(garment.name.toLowerCase())
+        }));
+        setInvoiceItems(autoItems);
+      }
+
+      // Show success message
+      toast({
+        title: "Customer Data Loaded",
+        description: `Customer information and ${garments?.length || 0} garment(s) have been automatically added to billing.`,
+      });
+
+      // Clear the location state to prevent re-processing
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  // Helper function to map garment names to clothing types
+  const mapGarmentToClothingType = (garmentName: string): 'shirt' | 'pant' | 'suit' | 'kurta_pajama' | 'blouse' | 'saree_blouse' | 'non_denim_pant' | 'short_kurta' | 'coat' | 'bandi' | 'westcot' | 'pajama' => {
+    const typeMap: { [key: string]: 'shirt' | 'pant' | 'suit' | 'kurta_pajama' | 'blouse' | 'saree_blouse' | 'non_denim_pant' | 'short_kurta' | 'coat' | 'bandi' | 'westcot' | 'pajama' } = {
+      'shirt': 'shirt',
+      'pant': 'pant',
+      'non denim pant': 'non_denim_pant',
+      'non-denim pant': 'non_denim_pant',
+      'short kurta': 'short_kurta',
+      'coat': 'coat',
+      'bandi': 'bandi',
+      'westcot': 'westcot',
+      'waistcoat': 'westcot',
+      'pajama': 'pajama',
+      'suit': 'suit',
+      'blazer': 'suit',
+      'kurta': 'kurta_pajama',
+      'blouse': 'blouse',
+      'saree_blouse': 'saree_blouse'
+    };
+    return typeMap[garmentName] || 'shirt';
+  };
 
   const calculateStats = () => {
     const stats = invoices.reduce((acc, invoice) => {
@@ -424,7 +496,7 @@ const Billing = () => {
         total_price: item.total_price,
         ready_made_item_id: null,
         measurement_id: null,
-        clothing_type: item.type === 'stitching' ? (item.clothingType || 'shirt') : null
+        clothing_type: item.type === 'stitching' ? (item.clothingType || 'shirt') as any : null
         // Note: hsn_code and measurements will be stored in the printed bill but not in database yet
         // until database migration is applied
       }));
@@ -667,7 +739,7 @@ const Billing = () => {
         total_price: item.total_price,
         ready_made_item_id: null,
         measurement_id: null,
-        clothing_type: item.type === 'stitching' ? (item.clothingType || 'shirt') : null
+        clothing_type: item.type === 'stitching' ? (item.clothingType || 'shirt') as any : null
       }));
 
       const { error: itemsError } = await supabase
@@ -878,25 +950,25 @@ const Billing = () => {
       </head>
       <body>
         <div class="bill-header">
-          <h1>A1 खादी भंडार</h1>
+          <h1>A1 Tailor & Designer</h1>
           <div class="address-section">
-            <p><strong>बेलवाटिका,नियर मोही टेलर्स,डाल्टनगंज</strong></p>
+            <p><strong>Belwatika, Near Mohi Tailors, Daltonganj</strong></p>
             <p>Mob: 7482621237, 9525519989</p>
           </div>
         </div>
         
         <div class="bill-number">
-          बिल नं. / Bill No.: ${invoice.invoice_number}
+          Bill No.: ${invoice.invoice_number}
         </div>
         
         <div class="bill-info">
           <div class="customer-info">
-            <p><strong>नाम / Name:</strong> ${invoice.customer.name}</p>
-            <p><strong>मोबाइल / Mobile:</strong> ${invoice.customer.mobile}</p>
-            ${invoice.customer.address ? `<p><strong>पता / Address:</strong> ${invoice.customer.address}</p>` : ''}
+            <p><strong>Name:</strong> ${invoice.customer.name}</p>
+            <p><strong>Mobile:</strong> ${invoice.customer.mobile}</p>
+            ${invoice.customer.address ? `<p><strong>Address:</strong> ${invoice.customer.address}</p>` : ''}
           </div>
           <div class="bill-details">
-            <p><strong>दिनांक / Date:</strong> ${new Date(invoice.created_at || '').toLocaleDateString('en-IN')}</p>
+            <p><strong>Date:</strong> ${new Date(invoice.created_at || '').toLocaleDateString('en-IN')}</p>
             ${invoice.due_date ? `<p><strong>Delivery Date:</strong> ${new Date(invoice.due_date).toLocaleDateString('en-IN')}</p>` : ''}
           </div>
         </div>
@@ -907,10 +979,10 @@ const Billing = () => {
           <table class="fabric-table">
             <thead>
               <tr>
-                <th class="description-col">विवरण / Description</th>
-                <th>मात्रा / Qty</th>
-                <th>दर / Rate</th>
-                <th>रकम / Amount</th>
+                <th class="description-col">Description</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -940,10 +1012,10 @@ const Billing = () => {
           <table class="stitching-table">
             <thead>
               <tr>
-                <th class="description-col">विवरण / Description</th>
-                <th>मात्रा / Qty</th>
-                <th>दर / Rate</th>
-                <th>रकम / Amount</th>
+                <th class="description-col">Description</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -981,7 +1053,7 @@ const Billing = () => {
         <div class="totals-section">
           <table class="totals-table">
             <tr>
-              <td>कुल / Subtotal:</td>
+              <td>Subtotal:</td>
               <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
             </tr>
             <tr>
@@ -989,7 +1061,7 @@ const Billing = () => {
               <td style="text-align: right;">₹${(subtotal * DISCOUNT_RATE / 100).toFixed(2)}</td>
             </tr>
             <tr class="total-row">
-              <td><strong>कुल योग / Total:</strong></td>
+              <td><strong>Total:</strong></td>
               <td style="text-align: right;"><strong>₹${totalAmount.toFixed(2)}</strong></td>
             </tr>
           </table>
@@ -1010,22 +1082,22 @@ const Billing = () => {
 
         ${invoice.notes ? `
           <div class="notes-section">
-            <strong>विशेष टिप्पणी / Special Notes:</strong><br />
+            <strong>Special Notes:</strong><br />
             ${invoice.notes}
           </div>
         ` : ''}
 
         <div class="signature-section">
           <div class="signature-box">
-            <div class="signature-line">ग्राहक के हस्ताक्षर<br>Customer Signature</div>
+            <div class="signature-line">Customer Signature</div>
           </div>
           <div class="signature-box">
-            <div class="signature-line">दुकानदार के हस्ताक्षर<br>Shopkeeper Signature</div>
+            <div class="signature-line">Shopkeeper Signature</div>
           </div>
         </div>
 
         <div class="bill-footer">
-          <p><strong>धन्यवाद / Thank You!</strong></p>
+          <p><strong>Thank You!</strong></p>
           <p style="font-size: 12px;">Quality Tailoring Services • Professional Stitching • Customer Satisfaction</p>
         </div>
       </body>
@@ -1041,10 +1113,10 @@ const Billing = () => {
   const { subtotal, discountAmount, totalAmount } = calculateTotals();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pl-2 pr-2 md:pl-3 md:pr-2">
-      <div className="max-w-7xl ml-0 mr-auto space-y-6 pr-2 md:pr-2 lg:pr-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 px-4 md:px-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header Section - Traditional Style */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 pl-3 pt-3 pr-3 pb-3 md:pl-4 md:pt-6 md:pr-6 md:pb-6">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-2">
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 flex items-center gap-3">
@@ -1061,7 +1133,7 @@ const Billing = () => {
                 className="bg-gray-900 hover:bg-gray-800 text-white border-gray-300"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                नया बिल / Create Bill
+                Create Bill
               </Button>
               <Button
                 variant={activeTab === 'list' ? 'default' : 'outline'}
@@ -1069,7 +1141,7 @@ const Billing = () => {
                 className="bg-gray-900 hover:bg-gray-800 text-white border-gray-300"
               >
                 <FileText className="w-4 h-4 mr-2" />
-                बिल देखें / View Bills
+                View Bills
               </Button>
             </div>
           </div>
@@ -1509,10 +1581,10 @@ const Billing = () => {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-blue-50">
-                          <TableHead className="text-gray-700 font-medium">विवरण / Description</TableHead>
-                          <TableHead className="text-gray-700 font-medium">मात्रा / Qty</TableHead>
-                          <TableHead className="text-gray-700 font-medium">दर / Rate</TableHead>
-                          <TableHead className="text-gray-700 font-medium">रकम / Amount</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Description</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Qty</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Rate</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Amount</TableHead>
                           <TableHead className="text-gray-700 font-medium">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1572,10 +1644,10 @@ const Billing = () => {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-green-50">
-                          <TableHead className="text-gray-700 font-medium">विवरण / Description</TableHead>
-                          <TableHead className="text-gray-700 font-medium">मात्रा / Qty</TableHead>
-                          <TableHead className="text-gray-700 font-medium">दर / Rate</TableHead>
-                          <TableHead className="text-gray-700 font-medium">रकम / Amount</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Description</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Qty</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Rate</TableHead>
+                          <TableHead className="text-gray-700 font-medium">Amount</TableHead>
                           <TableHead className="text-gray-700 font-medium">Actions</TableHead>
                         </TableRow>
                       </TableHeader>

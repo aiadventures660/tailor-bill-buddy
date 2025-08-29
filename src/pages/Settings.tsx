@@ -457,9 +457,9 @@ const Settings = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="px-4 sm:px-8 lg:px-12 space-y-6">
       {/* Header */}
-  <div className="pl-4 sm:pl-8 lg:pl-12 flex justify-between items-center">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center space-x-2">
             <SettingsIcon className="h-8 w-8 text-primary" />

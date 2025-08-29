@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Ruler, Plus, Search, User, Phone, Calendar, Filter, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { Ruler, Plus, Search, User, Phone, Calendar, Filter, ChevronDown, ChevronUp, Eye, EyeOff, Printer, Edit, Trash2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Customer {
@@ -22,7 +23,7 @@ interface Customer {
 interface Measurement {
   id: string;
   customer_id: string;
-  clothing_type: 'shirt' | 'pant' | 'kurta_pajama' | 'suit' | 'blouse' | 'saree_blouse';
+  clothing_type: 'shirt' | 'pant' | 'kurta_pajama' | 'suit' | 'blouse' | 'saree_blouse' | 'non_denim_pant' | 'short_kurta' | 'coat' | 'bandi' | 'westcot' | 'pajama';
   measurements: Record<string, number>;
   notes?: string;
   customers: Customer;
@@ -38,6 +39,12 @@ const clothingTypeFields = {
     { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
     { name: 'collar', label: 'Collar', unit: 'inches' },
     { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'hip', label: 'Hip', unit: 'inches' },
+    { name: 'pocket', label: 'Pocket', unit: 'text' },
+    { name: 'worker', label: 'Worker', unit: 'text' },
+    { name: 'customer', label: 'Customer', unit: 'text' },
+    { name: 'fitting_style', label: 'Fitting Style', unit: 'text' },
+    { name: 'cutting_master', label: 'Cutting Master', unit: 'text' },
   ],
   pant: [
     { name: 'waist', label: 'Waist', unit: 'inches' },
@@ -46,6 +53,16 @@ const clothingTypeFields = {
     { name: 'bottom', label: 'Bottom', unit: 'inches' },
     { name: 'thigh', label: 'Thigh', unit: 'inches' },
     { name: 'knee', label: 'Knee', unit: 'inches' },
+  ],
+  non_denim_pant: [
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'hip', label: 'Hip', unit: 'inches' },
+    { name: 'length', label: 'Pant Length', unit: 'inches' },
+    { name: 'bottom', label: 'Bottom', unit: 'inches' },
+    { name: 'thigh', label: 'Thigh', unit: 'inches' },
+    { name: 'knee', label: 'Knee', unit: 'inches' },
+    { name: 'fabric_type', label: 'Fabric Type', unit: 'text' },
+    { name: 'pocket_style', label: 'Pocket Style', unit: 'text' },
   ],
   kurta_pajama: [
     { name: 'chest', label: 'Chest', unit: 'inches' },
@@ -56,6 +73,15 @@ const clothingTypeFields = {
     { name: 'pajama_waist', label: 'Pajama Waist', unit: 'inches' },
     { name: 'pajama_length', label: 'Pajama Length', unit: 'inches' },
   ],
+  short_kurta: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'length', label: 'Kurta Length', unit: 'inches' },
+    { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
+    { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
+    { name: 'collar', label: 'Collar', unit: 'inches' },
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'hip', label: 'Hip', unit: 'inches' },
+  ],
   suit: [
     { name: 'chest', label: 'Chest', unit: 'inches' },
     { name: 'waist', label: 'Waist', unit: 'inches' },
@@ -65,6 +91,41 @@ const clothingTypeFields = {
     { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
     { name: 'pant_waist', label: 'Pant Waist', unit: 'inches' },
     { name: 'pant_length', label: 'Pant Length', unit: 'inches' },
+  ],
+  coat: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'hip', label: 'Hip', unit: 'inches' },
+    { name: 'length', label: 'Coat Length', unit: 'inches' },
+    { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
+    { name: 'sleeve', label: 'Sleeve', unit: 'inches' },
+    { name: 'lapel', label: 'Lapel', unit: 'inches' },
+    { name: 'back_length', label: 'Back Length', unit: 'inches' },
+  ],
+  bandi: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'length', label: 'Bandi Length', unit: 'inches' },
+    { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'armhole', label: 'Armhole', unit: 'inches' },
+    { name: 'neck', label: 'Neck', unit: 'inches' },
+  ],
+  westcot: [
+    { name: 'chest', label: 'Chest', unit: 'inches' },
+    { name: 'length', label: 'Westcot Length', unit: 'inches' },
+    { name: 'shoulder', label: 'Shoulder', unit: 'inches' },
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'back_length', label: 'Back Length', unit: 'inches' },
+    { name: 'neck', label: 'Neck', unit: 'inches' },
+  ],
+  pajama: [
+    { name: 'waist', label: 'Waist', unit: 'inches' },
+    { name: 'hip', label: 'Hip', unit: 'inches' },
+    { name: 'length', label: 'Pajama Length', unit: 'inches' },
+    { name: 'bottom', label: 'Bottom', unit: 'inches' },
+    { name: 'thigh', label: 'Thigh', unit: 'inches' },
+    { name: 'knee', label: 'Knee', unit: 'inches' },
+    { name: 'drawstring', label: 'Drawstring', unit: 'text' },
   ],
   blouse: [
     { name: 'chest', label: 'Chest', unit: 'inches' },
@@ -289,7 +350,7 @@ const Measurements = () => {
 
       const measurementPayload = {
         customer_id: selectedCustomer,
-        clothing_type: selectedClothingType,
+        clothing_type: selectedClothingType as any, // Temporary type assertion until DB is updated
         measurements: numericMeasurements,
         notes: notes || null,
       };
@@ -376,6 +437,232 @@ const Measurements = () => {
         variant: 'destructive',
       });
     }
+  };
+
+  const handlePrintMeasurement = (measurement: Measurement) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Error',
+        description: 'Unable to open print window. Please check your browser settings.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const currentDate = new Date().toLocaleDateString('en-IN');
+    const fields = clothingTypeFields[measurement.clothing_type];
+    
+    // Generate measurements HTML with only filled fields
+    const measurementsHTML = fields
+      .filter(field => measurement.measurements[field.name])
+      .map(field => `
+        <tr>
+          <td class="label">${field.label}:</td>
+          <td class="value">${measurement.measurements[field.name]}"</td>
+        </tr>
+      `).join('');
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Customer Measurements - ${measurement.customers.name}</title>
+        <style>
+          @media print {
+            body { -webkit-print-color-adjust: exact; }
+          }
+          
+          body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.4;
+            color: #333;
+          }
+          
+          .header {
+            text-align: center;
+            border-bottom: 3px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+          }
+          
+          .company-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          
+          .company-subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+          }
+          
+          .customer-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+          }
+          
+          .customer-info h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #333;
+          }
+          
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+          }
+          
+          .garment-title {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 10px;
+            background: #333;
+            color: white;
+            border-radius: 5px;
+          }
+          
+          .measurements-section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+          }
+          
+          .measurements-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+          }
+          
+          .measurements-table td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+          }
+          
+          .measurements-table .label {
+            background: #f8f9fa;
+            font-weight: bold;
+            width: 40%;
+          }
+          
+          .measurements-table .value {
+            background: white;
+            width: 60%;
+          }
+          
+          .notes-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+          }
+          
+          .notes-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+          }
+          
+          .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 2px solid #333;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+          }
+          
+          .signature-section {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+          }
+          
+          .signature-box {
+            width: 45%;
+            text-align: center;
+            border-top: 1px solid #333;
+            padding-top: 10px;
+            font-size: 12px;
+          }
+          
+          @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-name">A1 Tailor & Designer</div>
+          <div class="company-subtitle">Gents-Ladies Tailor & Fashion Designer</div>
+          <div class="company-subtitle">Belwatika, Near Mohi Tailors, Daltonganj | Mob: 7482621237, 9525519989</div>
+        </div>
+        
+        <div class="customer-info">
+          <h2>Customer Measurements</h2>
+          <div class="info-row">
+            <span><strong>Customer Name:</strong> ${measurement.customers.name}</span>
+            <span><strong>Date:</strong> ${new Date(measurement.created_at).toLocaleDateString('en-IN')}</span>
+          </div>
+          <div class="info-row">
+            <span><strong>Mobile:</strong> ${measurement.customers.mobile}</span>
+            <span><strong>Print Date:</strong> ${currentDate}</span>
+          </div>
+        </div>
+        
+        <div class="garment-title">MEASUREMENT ${getClothingTypeLabel(measurement.clothing_type).toUpperCase()}</div>
+        
+        <div class="measurements-section">
+          <table class="measurements-table">
+            ${measurementsHTML}
+          </table>
+        </div>
+        
+        ${measurement.notes ? `
+          <div class="notes-section">
+            <h3>Special Notes:</h3>
+            <p>${measurement.notes}</p>
+          </div>
+        ` : ''}
+        
+        <div class="signature-section">
+          <div class="signature-box">
+            Customer Signature
+          </div>
+          <div class="signature-box">
+            Tailor Signature
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Thank You for choosing A1 Tailor & Designer!</strong></p>
+          <p>Quality Tailoring Services • Professional Stitching • Customer Satisfaction</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Small delay to ensure content is loaded before printing
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+
+    toast({
+      title: 'Print Initiated',
+      description: `Measurement details for ${measurement.customers.name} sent to printer.`,
+    });
   };
 
   const handleCloseDialog = () => {
@@ -507,8 +794,8 @@ const Measurements = () => {
                               </Label>
                               <Input
                                 id={field.name}
-                                type="number"
-                                step="0.1"
+                                type={field.unit === 'inches' ? 'number' : 'text'}
+                                step={field.unit === 'inches' ? '0.1' : undefined}
                                 value={measurementData[field.name] || ''}
                                 onChange={(e) => setMeasurementData({
                                   ...measurementData,
@@ -677,6 +964,9 @@ const Measurements = () => {
 
         {/* Measurements List - Collapsible Cards */}
         <div className="space-y-3 sm:space-y-4">
+          <div className="text-center text-sm text-gray-500 mb-4">
+            Total measurements: {measurements.length}, Filtered: {filteredMeasurements.length}
+          </div>
           {filteredMeasurements.length === 0 ? (
             <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="pt-6">
@@ -762,6 +1052,55 @@ const Measurements = () => {
                             </p>
                           </div>
                         ))}
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="mt-6 pt-4 border-t border-gray-200">
+                        <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-2">
+                          <Button
+                            onClick={() => handleEdit(measurement)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
+                          >
+                            <Edit className="h-4 w-4" />
+                            <span>Edit</span>
+                          </Button>
+                          <Button
+                            onClick={() => handlePrintMeasurement(measurement)}
+                            className="bg-gray-900 hover:bg-gray-800 text-white px-4 sm:px-6 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
+                          >
+                            <Printer className="h-4 w-4" />
+                            <span>Print</span>
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                className="bg-red-600 hover:bg-red-700 text-white px-4 sm:px-6 py-2 rounded-lg flex items-center justify-center space-x-2 transition-colors text-sm"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span>Delete</span>
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Measurement</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the measurement for <strong>{measurement.customers.name}</strong> ({getClothingTypeLabel(measurement.clothing_type)})?
+                                  <br /><br />
+                                  This action cannot be undone and will permanently remove all measurement data.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(measurement.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                       
                       {measurement.notes && (

@@ -24,6 +24,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { LoadingSpinner, LoadingCard, LoadingStats } from '@/components/ui/loading';
+import DataSeeder from '@/components/DataSeeder';
 const Dashboard = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -724,6 +725,9 @@ const Dashboard = () => {
             </div>
           </CardContent>
         </Card>
+        
+        {/* DataSeeder Component for testing */}
+        <DataSeeder />
       </div>
     </div>
   );
